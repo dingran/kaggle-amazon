@@ -12,26 +12,9 @@ import hashlib
 
 DEFAULT_CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
 
+from sklearn.metrics import fbeta_score
 
-def load_pickled_data(file, columns):
-    """
-    Loads pickled training and test data.
-
-    Parameters
-    ----------
-    file    :
-              Name of the pickle file.
-    columns : list of strings
-              List of columns in pickled data we're interested in.
-
-    Returns
-    -------
-    A tuple of datasets for given columns.
-    """
-
-    with open(file, mode='rb') as f:
-        dataset = pickle.load(f)
-    return tuple(map(lambda c: dataset[c], columns))
+N_CLASSES = 17
 
 
 def generate_data(X_train, y_train, X_valid, y_valid, X_test, y_test,
@@ -77,8 +60,35 @@ def generate_data(X_train, y_train, X_valid, y_valid, X_test, y_test,
     return (X_train, y_train, X_valid, y_valid, X_test, y_test)
 
 
-def preprocess_data(X, use_grayscale=True, keep_original=False, equalize_all=False, normed=True):
-    assert X.shape[1] == X.shape[2] == 32
+def preprocess_single_image(xx, use_grayscale=True, keep_original=False, normed=True):
+    if use_grayscale:
+        color_method = cv2.COLOR_BGR2GRAY
+    else:
+        color_method = cv2.COLOR_BGR2YUV
+
+    res = cv2.cvtColor(xx, color_method)
+    if len(res.shape) < 3:
+        res = np.expand_dims(res, axis=2)
+
+    if keep_original:
+        res = np.concatenate([res, xx], axis=2)
+
+    # if equalize_all:
+    #     for i in range(res.shape[-1]):
+    #         res[:, :, i] = clahe.apply(res[:, :, i])
+    # else:  # only sharpening channel 0, assuming this is a grayscale channel!!!!!
+    #     res[:, :, 0] = clahe.apply(res[:, :, 0])
+
+    if normed:
+        res = res.astype(float)
+        for i in range(res.shape[-1]):  # normalize to 0 mean, and 1 stdev
+            res[:, :, i] = (res[:, :, i] - res[:, :, i].mean()) / res[:, :, i].std()
+
+    return res
+
+
+def preprocess_data(X, use_grayscale=True, keep_original=False, normed=True):
+    # assert X.shape[1] == X.shape[2] == 32
 
     print('Input shapes: ', X.shape)
     X_out = []
@@ -92,23 +102,24 @@ def preprocess_data(X, use_grayscale=True, keep_original=False, equalize_all=Fal
         print('Using YUV')
 
     for xx in tqdm(X):
-        res = cv2.cvtColor(xx, color_method)
-        if len(res.shape) < 3:
-            res = np.expand_dims(res, axis=2)
-
-        if keep_original:
-            res = np.concatenate([res, xx], axis=2)
-
-        if equalize_all:
-            for i in range(res.shape[-1]):
-                res[:, :, i] = clahe.apply(res[:, :, i])
-        else:  # only sharpening channel 0, assuming this is a grayscale channel!!!!!
-            res[:, :, 0] = clahe.apply(res[:, :, 0])
-
-        if normed:
-            res = res.astype(float)
-            for i in range(res.shape[-1]):  # normalize to 0 mean, and 1 stdev
-                res[:, :, i] = (res[:, :, i] - res[:, :, i].mean()) / res[:, :, i].std()
+        res = preprocess_single_image(xx, use_grayscale, keep_original, normed)
+        # res = cv2.cvtColor(xx, color_method)
+        # if len(res.shape) < 3:
+        #     res = np.expand_dims(res, axis=2)
+        #
+        # if keep_original:
+        #     res = np.concatenate([res, xx], axis=2)
+        #
+        # # if equalize_all:
+        # #     for i in range(res.shape[-1]):
+        # #         res[:, :, i] = clahe.apply(res[:, :, i])
+        # # else:  # only sharpening channel 0, assuming this is a grayscale channel!!!!!
+        # #     res[:, :, 0] = clahe.apply(res[:, :, 0])
+        #
+        # if normed:
+        #     res = res.astype(float)
+        #     for i in range(res.shape[-1]):  # normalize to 0 mean, and 1 stdev
+        #         res[:, :, i] = (res[:, :, i] - res[:, :, i].mean()) / res[:, :, i].std()
 
         X_out.append(res)
 
@@ -178,19 +189,19 @@ params_orig_lenet = dict(conv1_k=5, conv1_d=6, conv1_p=0.95,
                          conv2_k=5, conv2_d=16, conv2_p=0.95,
                          fc3_size=120, fc3_p=0.5,
                          fc4_size=84, fc4_p=0.5,
-                         num_classes=43, model_name='lenet', name='orig_lenet')
+                         num_classes=N_CLASSES, model_name='lenet', name='orig_lenet')
 
 params_big_lenet = dict(conv1_k=5, conv1_d=6 * 4, conv1_p=0.8,
                         conv2_k=5, conv2_d=16 * 4, conv2_p=0.8,
                         fc3_size=120 * 4, fc3_p=0.5,
                         fc4_size=84 * 3, fc4_p=0.5,
-                        num_classes=43, model_name='lenet', name='big_lenet')
+                        num_classes=N_CLASSES, model_name='lenet', name='big_lenet')
 
 params_huge_lenet = dict(conv1_k=5, conv1_d=6 * 8, conv1_p=0.8,
                          conv2_k=5, conv2_d=16 * 8, conv2_p=0.8,
                          fc3_size=120 * 8, fc3_p=0.5,
                          fc4_size=84 * 6, fc4_p=0.5,
-                         num_classes=43, model_name='lenet', name='huge_lenet')
+                         num_classes=N_CLASSES, model_name='lenet', name='huge_lenet')
 
 
 def lenet(x, params, is_training):
@@ -235,13 +246,13 @@ params_sermanet_v2 = dict(conv1_k=5, conv1_d=32, conv1_p=0.9,
                           conv2_k=5, conv2_d=64, conv2_p=0.8,
                           conv3_k=5, conv3_d=128, conv3_p=0.7,
                           fc4_size=1024, fc4_p=0.5,
-                          num_classes=43, model_name='sermanet_v2', name='standard')
+                          num_classes=N_CLASSES, model_name='sermanet_v2', name='standard')
 
 params_sermanet_v2_big = dict(conv1_k=5, conv1_d=32 * 2, conv1_p=0.9,
                               conv2_k=5, conv2_d=64 * 2, conv2_p=0.8,
                               conv3_k=5, conv3_d=128 * 2, conv3_p=0.7,
                               fc4_size=1024 * 2, fc4_p=0.5,
-                              num_classes=43, model_name='sermanet_v2', name='big')
+                              num_classes=N_CLASSES, model_name='sermanet_v2', name='big')
 
 
 def sermanet_v2(x, params, is_training):
@@ -299,12 +310,12 @@ def sermanet_v2(x, params, is_training):
 params_sermanet = dict(conv1_k=5, conv1_d=108, conv1_p=0.9,
                        conv2_k=5, conv2_d=108, conv2_p=0.8,
                        fc4_size=100, fc4_p=0.5,
-                       num_classes=43, model_name='sermanet', name='standard')
+                       num_classes=N_CLASSES, model_name='sermanet', name='standard')
 
 params_sermanet_big = dict(conv1_k=5, conv1_d=100, conv1_p=0.9,
                            conv2_k=5, conv2_d=200, conv2_p=0.8,
                            fc4_size=200, fc4_p=0.5,
-                           num_classes=43, model_name='sermanet', name='big')
+                           num_classes=N_CLASSES, model_name='sermanet', name='big')
 
 
 def sermanet(x, params, is_training):
@@ -353,9 +364,7 @@ def train_model(X_train, y_train, X_valid, y_valid, X_test, y_test,
                 model=lenet, model_params=params_orig_lenet,
                 learning_rate=0.001, max_epochs=1001, batch_size=256,
                 early_stopping_enabled=True, early_stopping_patience=10,
-                log_epoch=1, print_epoch=1,
-                top_k=5, return_top_k=False,
-                plot_featuremap=False):
+                log_epoch=1, print_epoch=1):
     print('========= train_model() arguments: ==========')
     frame = inspect.currentframe()
     args, _, _, values = inspect.getargvalues(frame)
@@ -394,23 +403,25 @@ def train_model(X_train, y_train, X_valid, y_valid, X_test, y_test,
     graph = tf.Graph()
     with graph.as_default():
         # Input data. For the training data, we use a placeholder that will be fed at run time with a training minibatch.
-        x = tf.placeholder(tf.float32, (None, 32, 32, X_test.shape[-1]))
-        y = tf.placeholder(tf.int32, (None))
-        one_hot_y = tf.one_hot(y, model_params['num_classes'])
+        x = tf.placeholder(tf.float32, (None, X_test.shape[1], X_test.shape[2], X_test.shape[-1]))
+        y = tf.placeholder(tf.float32, (None, 17))
+        # one_hot_y = tf.one_hot(y, model_params['num_classes'])
         is_training = tf.placeholder(tf.bool)
 
         logits = model(x, params=model_params, is_training=is_training)
 
-        predictions = tf.nn.softmax(logits)
-        top_k_predictions = tf.nn.top_k(predictions, top_k)
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=one_hot_y, logits=logits)
+        predictions = tf.nn.sigmoid(logits)
+        # top_k_predictions = tf.nn.top_k(predictions, top_k)
+        # cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=one_hot_y, logits=logits)
+        cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=logits)
         loss_operation = tf.reduce_mean(cross_entropy, name='loss')
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         training_operation = optimizer.minimize(loss_operation)
-        pred_y = tf.argmax(logits, 1, name='prediction')
-        actual_y = tf.argmax(one_hot_y, 1)
-        correct_prediction = tf.equal(pred_y, actual_y)
-        accuracy_operation = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
+
+        # pred_y = tf.argmax(logits, 1, name='prediction')
+        # actual_y = tf.argmax(one_hot_y, 1)
+        # correct_prediction = tf.equal(pred_y, actual_y)
+        # accuracy_operation = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
 
     with tf.Session(graph=graph) as sess:
         sess.run(tf.global_variables_initializer())
@@ -430,44 +441,53 @@ def train_model(X_train, y_train, X_valid, y_valid, X_test, y_test,
             total_parameters += variable_parametes
         print('total # of parameters: ', total_parameters)
 
-        def output_top_k(X_data):
-            top_k_preds = sess.run([top_k_predictions], feed_dict={x: X_data, is_training: False})
-            return top_k_preds
-
-        def evaluate(X_data, y_data, aux_output=False):
+        def predict(X_data):
             n_data = len(X_data)
-            correct_pred = np.array([])
-            y_pred = np.array([])
-            y_actual = np.array([])
+            logits_pred = []
+            for offset in tqdm(range(0, n_data, batch_size)):
+                batch_x = X_data[offset:offset + batch_size]
+
+                batch_logits = sess.run(predictions, feed_dict={x: batch_x, is_training: False})
+
+                batch_logits = np.array(batch_logits)
+                # print(batch_logits.shape)
+                logits_pred.append(batch_logits)
+
+            logits_pred = np.concatenate(logits_pred, axis=0)
+            y_pred = np.array(logits_pred) > 0.2
+            y_pred = y_pred.astype(int)
+
+            return y_pred, logits_pred
+
+        def evaluate(X_data, y_data):
+            n_data = len(X_data)
+            logits_pred = []
+            y_actual = []
             loss_batch = np.array([])
-            acc_batch = np.array([])
             batch_sizes = np.array([])
             for offset in range(0, n_data, batch_size):
                 batch_x, batch_y = X_data[offset:offset + batch_size], y_data[offset:offset + batch_size]
                 batch_sizes = np.append(batch_sizes, batch_y.shape[0])
 
-                if aux_output:
-                    accuracy, loss, cp_, yp_, ya_ = \
-                        sess.run([accuracy_operation, loss_operation, correct_prediction, pred_y, actual_y],
-                                 feed_dict={x: batch_x, y: batch_y, is_training: False})
+                batch_logits, loss, ya_ = sess.run([predictions, loss_operation, y],
+                                                   feed_dict={x: batch_x, y: batch_y, is_training: False})
 
-                    correct_pred = np.append(correct_pred, cp_)
-                    y_pred = np.append(y_pred, yp_)
-                    y_actual = np.append(y_actual, ya_)
-                else:
-                    accuracy, loss = sess.run([accuracy_operation, loss_operation],
-                                              feed_dict={x: batch_x, y: batch_y, is_training: False})
-
+                y_actual.append(ya_)
+                batch_logits = np.array(batch_logits)
+                # print(batch_logits.shape)
+                logits_pred.append(batch_logits)
                 loss_batch = np.append(loss_batch, loss)
-                acc_batch = np.append(acc_batch, accuracy)
 
-            final_acc = np.average(acc_batch, weights=batch_sizes)
+            y_actual = np.concatenate(y_actual, axis=0)
+            logits_pred = np.concatenate(logits_pred, axis=0)
+            y_pred = np.array(logits_pred) > 0.2
+            y_pred = y_pred.astype(int)
+
             final_loss = np.average(loss_batch, weights=batch_sizes)
 
-            if aux_output:
-                return final_acc, final_loss, correct_pred, y_pred, y_actual
-            else:
-                return final_acc, final_loss
+            final_f2beta = fbeta_score(y_actual, y_pred, beta=2, average='samples')
+
+            return final_f2beta, final_loss
 
         # If we chose to keep training previously trained model, restore session.
         if resuming:
@@ -515,8 +535,8 @@ def train_model(X_train, y_train, X_valid, y_valid, X_test, y_test,
 
                 if epoch % print_epoch == 0:
                     print("-------------- EPOCH %4d/%d --------------" % (epoch, max_epochs))
-                    print("     Train loss: %.8f, accuracy: %.2f%%" % (train_loss, 100 * train_accuracy))
-                    print("Validation loss: %.8f, accuracy: %.2f%%" % (valid_loss, 100 * valid_accuracy))
+                    print("     Train loss: %.8f, f2beta: %.2f%%" % (train_loss, 100 * train_accuracy))
+                    print("Validation loss: %.8f, f2beta: %.2f%%" % (valid_loss, 100 * valid_accuracy))
                     print("      Best loss: %.8f at epoch %d" % (
                         early_stopping.best_monitored_value, early_stopping.best_monitored_epoch))
                     print("   Elapsed time: " + get_time_hhmmss(start))
@@ -542,12 +562,15 @@ def train_model(X_train, y_train, X_valid, y_valid, X_test, y_test,
                     ))
                     break
 
+        if max_epochs == -2:  # make prediction only
+            return predict(X_test)
+
         # Evaluate on test dataset.
-        valid_accuracy, valid_loss, valid_cp, valid_yp, valid_ya = evaluate(X_valid, y_valid, aux_output=True)
-        test_accuracy, test_loss, test_cp, test_yp, test_ya = evaluate(X_test, y_test, aux_output=True)
+        valid_accuracy, valid_loss = evaluate(X_valid, y_valid)
+        test_accuracy, test_loss = evaluate(X_test, y_test)
         print("=============================================")
-        print(" Valid loss: %.8f, accuracy = %.2f%%)" % (valid_loss, 100 * valid_accuracy))
-        print(" Test loss: %.8f, accuracy = %.2f%%)" % (test_loss, 100 * test_accuracy))
+        print(" Valid loss: %.8f, f2beta= %.2f%%)" % (valid_loss, 100 * valid_accuracy))
+        print(" Test loss: %.8f, f2beta= %.2f%%)" % (test_loss, 100 * test_accuracy))
         print(" Total time: " + get_time_hhmmss(start))
         print("  Timestamp: " + get_time_hhmmss())
 
@@ -559,61 +582,9 @@ def train_model(X_train, y_train, X_valid, y_valid, X_test, y_test,
                  valid_accuracy_history=valid_accuracy_history)
         print("Train history file: " + model_train_history)
 
-        if return_top_k:
-            top_k_preds = output_top_k(X_test)
-
-        def outputFeatureMap(image_input, tf_activation, title='', activation_min=-1, activation_max=-1, plt_num=1):
-            # Here make sure to preprocess your image_input in a way your network expects
-            # with size, normalization, ect if needed
-            # image_input =
-            # Note: x should be the same name as your network's tensorflow data placeholder variable
-            # If you get an error tf_activation is not defined it may be having trouble accessing the variable from inside a function
-            activation = tf_activation.eval(session=sess, feed_dict={x: image_input, is_training: False})
-            featuremaps = activation.shape[3]
-            plt.figure(figsize=((featuremaps // 6 + 1) * 2, 6 * 2))
-
-            for featuremap in range(featuremaps):
-                plt.subplot(6, featuremaps // 6 + 1,
-                            featuremap + 1)  # sets the number of feature maps to show on each row and column
-                # plt.title('FeatureMap ' + str(featuremap))  # displays the feature map number
-                if activation_min != -1 & activation_max != -1:
-                    plt.imshow(activation[0, :, :, featuremap], interpolation="nearest", vmin=activation_min,
-                               vmax=activation_max, cmap="gray")
-                elif activation_max != -1:
-                    plt.imshow(activation[0, :, :, featuremap], interpolation="nearest", vmax=activation_max,
-                               cmap="gray")
-                elif activation_min != -1:
-                    plt.imshow(activation[0, :, :, featuremap], interpolation="nearest", vmin=activation_min,
-                               cmap="gray")
-                else:
-                    plt.imshow(activation[0, :, :, featuremap], interpolation="nearest", cmap="gray")
-
-                plt.yticks([])
-                plt.xticks([])
-
-            plt.suptitle(title)
-            plt.show()
-
-        if plot_featuremap:
-            for n_img in range(10):
-                outputFeatureMap(np.expand_dims(X_test[n_img], axis=0),
-                                 graph.get_operation_by_name('conv1/add').outputs[0],
-                                 title='conv1/add, img: {}'.format(n_img))
-                # outputFeatureMap(np.expand_dims(X_test[n_img], axis=0), graph.get_operation_by_name('conv1/Relu').outputs[0], title='conv1/Relu')
-
-                # outputFeatureMap(np.expand_dims(X_test[n_img], axis=0), graph.get_operation_by_name('conv2/add').outputs[0], title='conv2/add')
-                # outputFeatureMap(np.expand_dims(X_test[n_img], axis=0), graph.get_operation_by_name('conv2/Relu').outputs[0], title='conv2/Relu')
-
-                # outputFeatureMap(np.expand_dims(X_test[n_img], axis=0), graph.get_operation_by_name('conv3/add').outputs[0], title='conv3/add')
-
-    result_dict = dict(test_accuracy=test_accuracy, test_loss=test_loss, test_cp=test_cp, test_yp=test_yp,
-                       test_ya=test_ya,
-                       valid_accuracy=valid_accuracy, valid_loss=valid_loss, valid_cp=valid_cp, valid_yp=valid_yp,
-                       valid_ya=valid_ya)
-    if return_top_k:
-        return result_dict, top_k_preds
-    else:
-        return result_dict
+    result_dict = dict(test_accuracy=test_accuracy, test_loss=test_loss,
+                       valid_accuracy=valid_accuracy, valid_loss=valid_loss)
+    return result_dict
 
 
 class EarlyStopping(object):
@@ -786,83 +757,6 @@ def blur_and_sharpen_img(input_img, kernel=(3, 3), ratio=0.7, factor=1.0):
     blur = cv2.GaussianBlur(input_img, kernel, 0)
     sharp = cv2.addWeighted(input_img, 1.0 + ratio * factor, blur, -ratio * factor, 0)
     return blur, sharp
-
-
-def flip_extend(X, y):
-    """
-    Credit: https://github.com/navoshta/traffic-signs/blob/master/Traffic_Signs_Recognition.ipynb
-
-    Extends existing images dataset by flipping images of some classes. As some images would still belong
-    to same class after flipping we extend such classes with flipped images. Images of other would toggle
-    between two classes when flipped, so for those we extend existing datasets as well.
-
-    Parameters
-    ----------
-    X       : ndarray
-              Dataset array containing feature examples.
-    y       : ndarray, optional, defaults to `None`
-              Dataset labels in index form.
-
-    Returns
-    -------
-    A tuple of X and y.
-    """
-
-    print('Input sizes: ', X.shape, y.shape)
-
-    # Classes of signs that, when flipped horizontally, should still be classified as the same class
-    self_flippable_horizontally = np.array([11, 12, 13, 15, 17, 18, 22, 26, 30, 35])
-    # Classes of signs that, when flipped vertically, should still be classified as the same class
-    self_flippable_vertically = np.array([1, 5, 12, 15, 17])
-    # Classes of signs that, when flipped horizontally and then vertically, should still be classified as the same class
-    self_flippable_both = np.array([32, 40])
-    # Classes of signs that, when flipped horizontally, would still be meaningful, but should be classified as some other class
-    cross_flippable = np.array([
-        [19, 20],
-        [33, 34],
-        [36, 37],
-        [38, 39],
-        [20, 19],
-        [34, 33],
-        [37, 36],
-        [39, 38],
-    ])
-    num_classes = 43
-
-    X_extended = np.empty([0, X.shape[1], X.shape[2], X.shape[3]], dtype=X.dtype)
-    y_extended = np.empty([0], dtype=y.dtype)
-
-    for c in tqdm(range(num_classes)):
-        # First copy existing data for this class
-        X_extended = np.append(X_extended, X[y == c], axis=0)
-        # If we can flip images of this class horizontally and they would still belong to said class...
-        if c in self_flippable_horizontally:
-            # ...Copy their flipped versions into extended array.
-            X_extended = np.append(X_extended, X[y == c][:, :, ::-1, :], axis=0)
-        # If we can flip images of this class horizontally and they would belong to other class...
-        if c in cross_flippable[:, 0]:
-            # ...Copy flipped images of that other class to the extended array.
-            flip_class = cross_flippable[cross_flippable[:, 0] == c][0][1]
-            X_extended = np.append(X_extended, X[y == flip_class][:, :, ::-1, :], axis=0)
-        # Fill labels for added images set to current class.
-        y_extended = np.append(y_extended, np.full((X_extended.shape[0] - y_extended.shape[0]), c, dtype=int))
-
-        # If we can flip images of this class vertically and they would still belong to said class...
-        if c in self_flippable_vertically:
-            # ...Copy their flipped versions into extended array.
-            X_extended = np.append(X_extended, X_extended[y_extended == c][:, ::-1, :, :], axis=0)
-        # Fill labels for added images set to current class.
-        y_extended = np.append(y_extended, np.full((X_extended.shape[0] - y_extended.shape[0]), c, dtype=int))
-
-        # If we can flip images of this class horizontally AND vertically and they would still belong to said class...
-        if c in self_flippable_both:
-            # ...Copy their flipped versions into extended array.
-            X_extended = np.append(X_extended, X_extended[y_extended == c][:, ::-1, ::-1, :], axis=0)
-        # Fill labels for added images set to current class.
-        y_extended = np.append(y_extended, np.full((X_extended.shape[0] - y_extended.shape[0]), c, dtype=int))
-
-    print('Output sizes: ', X_extended.shape, y_extended.shape)
-    return X_extended, y_extended
 
 
 def get_time_hhmmss(start=None):
