@@ -1,3 +1,4 @@
+import gc
 import numpy as np
 from tqdm import tqdm
 import cv2
@@ -521,6 +522,7 @@ def train_model(X_train, y_train, X_valid, y_valid, X_test, y_test,
         print(" Timestamp: " + get_time_hhmmss())
 
         for epoch in range(max_epochs):
+            gc.collect() 
             X_train, y_train = shuffle(X_train, y_train)
 
             for offset in tqdm(range(0, X_train.shape[0], batch_size)):
