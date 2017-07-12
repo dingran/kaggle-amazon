@@ -17,16 +17,15 @@ from keras import backend as K
 from keras.callbacks import ModelCheckpoint, Callback, EarlyStopping
 from keras.preprocessing.image import ImageDataGenerator
 
+dir_path = os.path.dirname(os.path.realpath(__file__))
+code_dir = dir_path
+data_dir = os.path.join(dir_path, '../input')
+print(data_dir)
+
+file_type = 'jpg'
+print('file type: ', file_type)
 
 if 0:
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    code_dir = dir_path
-    data_dir = os.path.join(dir_path, '../input')
-    print(data_dir)
-
-    file_type = 'jpg'
-    print('file type: ', file_type)
-
     xtrain_files = glob.glob(os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, '*')))
     ytrain_files = glob.glob(os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, '*')))
 
@@ -66,10 +65,6 @@ if 0:
     print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
 
 else:
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    data_dir = os.path.join(dir_path, '../input')
-    print(data_dir)
-
     train_label = pd.read_csv(os.path.join(data_dir, 'train_v2.csv'))
     labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, clear, cloudy, conventional_mine, cultivation, habitation, haze, partly_cloudy, primary, road, selective_logging, slash_burn, water'
     labels = labels_str.split(', ')
@@ -83,8 +78,8 @@ else:
             vec[label_map[t]] = 1
         return vec
 
-    file_type = 'jpg'
-    print('file type: ', file_type)
+
+    train_label['y'] = train_label.tags.apply(tags_to_vec)
 
     X_train = []
     y_train = []
