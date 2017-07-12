@@ -8,6 +8,7 @@ from skimage.transform import resize
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import fbeta_score
 from tqdm import tqdm
+from numpy.random import shuffle
 
 from keras.applications.inception_v3 import InceptionV3
 from keras.preprocessing import image
@@ -79,7 +80,7 @@ else:
 
     train_label['y'] = train_label.tags.apply(tags_to_vec)
 
-    N_train_limit = 2000
+    N_train_limit = int(2e9)
     N_sample = min(N_train_limit, train_label.shape[0])
     X_train = np.empty([N_sample, 299, 299, 3])
     y_train = np.empty([N_sample, 17])
@@ -98,7 +99,16 @@ else:
     # y_train = np.stack(y_train, axis=0)
     print(X_train.shape, y_train.shape)
 
-    xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
+    rand_idx = np.arange(0, N_sample)
+    shuffle(rand_idx)
+
+    N_train= int(0.8*N_sample)
+
+    xtrain = X_train[rand_idx[:N_train]]
+    ytrain = y_train[rand_idx[:N_train]]
+    xvalid= X_train[rand_idx[N_train:]]
+    yvalid= y_train[rand_idx[N_train:]]
+    # xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
     print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
 
     try:
