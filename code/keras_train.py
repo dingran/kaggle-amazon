@@ -79,22 +79,23 @@ else:
 
     train_label['y'] = train_label.tags.apply(tags_to_vec)
 
-    X_train = []
-    y_train = []
     N_train_limit = 2000e9
+    N_sample = min(N_train_limit, train_label.shape[0])
+    X_train = np.empty([N_sample, 299, 299, 3])
+    y_train = np.empty([N_sample, 17])
     i = 0
     for idx, row in tqdm(train_label.iterrows(), total=min(N_train_limit, train_label.shape[0])):
         image = io.imread(
             os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
         image = resize(image, (299, 299))  # for InceptionV3
-        X_train.append(image)
-        y_train.append(row['y'])
+        X_train[i, :, :, :] = image
+        y_train[i, :] = row['y']
         i += 1
         if i == N_train_limit:
             break
 
-    X_train = np.stack(X_train, axis=0)
-    y_train = np.stack(y_train, axis=0)
+    # X_train = np.stack(X_train, axis=0)
+    # y_train = np.stack(y_train, axis=0)
     print(X_train.shape, y_train.shape)
 
     xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
