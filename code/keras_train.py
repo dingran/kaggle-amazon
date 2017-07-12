@@ -1,6 +1,10 @@
 import numpy as np
+import pandas as pd
 import glob
 import os
+import gc
+from skimage import io
+from skimage.transform import resize
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import fbeta_score
 from tqdm import tqdm
@@ -13,51 +17,101 @@ from keras import backend as K
 from keras.callbacks import ModelCheckpoint, Callback, EarlyStopping
 from keras.preprocessing.image import ImageDataGenerator
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-code_dir = dir_path
-data_dir = os.path.join(dir_path, '../input')
-print(data_dir)
 
-file_type = 'jpg'
-print('file type: ', file_type)
+if 0:
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    code_dir = dir_path
+    data_dir = os.path.join(dir_path, '../input')
+    print(data_dir)
 
-xtrain_files = glob.glob(os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, '*')))
-ytrain_files = glob.glob(os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, '*')))
+    file_type = 'jpg'
+    print('file type: ', file_type)
 
-print(len(xtrain_files))
-print(len(ytrain_files))
+    xtrain_files = glob.glob(os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, '*')))
+    ytrain_files = glob.glob(os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, '*')))
 
-xtrain_npy = None
-ytrain_npy = None
+    print(len(xtrain_files))
+    print(len(ytrain_files))
 
-N_chunck = len(xtrain_files)
-print('N_chunck', N_chunck)
+    xtrain_npy = None
+    ytrain_npy = None
 
-for i in range(1, N_chunck+1):
-    xtrain_fname = os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, str(i)))
-    ytrain_fname = os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, str(i)))
-    print(xtrain_fname)
-    print(ytrain_fname)
+    N_chunck = len(xtrain_files)
+    print('N_chunck', N_chunck)
 
-    if xtrain_npy is None:
-        xtrain_npy = np.load(xtrain_fname)
-        ytrain_npy = np.load(ytrain_fname)
-    else:
-        xtrain_npy = np.concatenate((xtrain_npy, np.load(xtrain_fname)), axis=0)
-        ytrain_npy = np.concatenate((ytrain_npy, np.load(ytrain_fname)), axis=0)
-        print(xtrain_npy.shape)
-        print(ytrain_npy.shape)
+    for i in range(1, N_chunck+1):
+        xtrain_fname = os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, str(i)))
+        ytrain_fname = os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, str(i)))
+        print(xtrain_fname)
+        print(ytrain_fname)
 
-print(xtrain_npy.shape)
-print(ytrain_npy.shape)
+        if xtrain_npy is None:
+            xtrain_npy = np.load(xtrain_fname)
+            ytrain_npy = np.load(ytrain_fname)
+        else:
+            xtrain_npy = np.concatenate((xtrain_npy, np.load(xtrain_fname)), axis=0)
+            ytrain_npy = np.concatenate((ytrain_npy, np.load(ytrain_fname)), axis=0)
+            print(xtrain_npy.shape)
+            print(ytrain_npy.shape)
 
-
-def image_normalization(xdata):
-    pass
+    print(xtrain_npy.shape)
+    print(ytrain_npy.shape)
 
 
-xtrain, xvalid, ytrain, yvalid = train_test_split(xtrain_npy, ytrain_npy, test_size=0.2)
-print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
+    def image_normalization(xdata):
+        pass
+
+
+    xtrain, xvalid, ytrain, yvalid = train_test_split(xtrain_npy, ytrain_npy, test_size=0.2)
+    print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
+
+else:
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    data_dir = os.path.join(dir_path, '../input')
+    print(data_dir)
+
+    train_label = pd.read_csv(os.path.join(data_dir, 'train_v2.csv'))
+    labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, clear, cloudy, conventional_mine, cultivation, habitation, haze, partly_cloudy, primary, road, selective_logging, slash_burn, water'
+    labels = labels_str.split(', ')
+    label_map = {x: labels.index(x) for x in labels}
+
+
+    def tags_to_vec(tags):
+        tags_list = tags.split(' ')
+        vec = np.zeros(17)
+        for t in tags_list:
+            vec[label_map[t]] = 1
+        return vec
+
+    file_type = 'jpg'
+    print('file type: ', file_type)
+
+    X_train = []
+    y_train = []
+    N_train_limit = 2000e9
+    i = 0
+    for idx, row in tqdm(train_label.iterrows(), total=min(N_train_limit, train_label.shape[0])):
+        image = io.imread( os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
+        image = resize(image, (299, 299))  # for InceptionV3
+        X_train.append(image)
+        y_train.append(row['y'])
+        i += 1
+        if i == N_train_limit:
+            break
+
+    X_train = np.stack(X_train, axis=0)
+    y_train = np.stack(y_train, axis=0)
+    print(X_train.shape, y_train.shape)
+
+    xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
+    print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
+
+    try:
+        del X_train, y_train
+    except:
+        pass
+    gc.collect()
+
 
 xtrain = xtrain.astype('float32')
 xvalid = xvalid.astype('float32')
@@ -106,7 +160,7 @@ class f2beta(Callback):
         y_true = self.yval
         y_pred = self.model.predict(x_val)
 
-        y_pred = (y_pred > 0.2).astpe(int)
+        y_pred = (y_pred > 0.2).astype(int)
         score = fbeta_score(y_true, y_pred, beta=2, average='samples')
 
         return score
