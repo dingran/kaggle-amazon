@@ -41,7 +41,7 @@ for i in range(1, N_chunck+1):
 
     if xtrain_npy is None:
         xtrain_npy = np.load(xtrain_fname)
-        ytrain_npy = np.load(ytrain_files)
+        ytrain_npy = np.load(ytrain_fname)
     else:
         xtrain_npy = np.concatenate((xtrain_npy, np.load(xtrain_fname)), axis=0)
         ytrain_npy = np.concatenate((ytrain_npy, np.load(ytrain_fname)), axis=0)
