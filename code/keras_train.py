@@ -24,26 +24,30 @@ print('file type: ', file_type)
 xtrain_files = glob.glob(os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, '*')))
 ytrain_files = glob.glob(os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, '*')))
 
-print(xtrain_files)
+print(len(xtrain_files))
+print(len(ytrain_files))
 
 xtrain_npy = None
 ytrain_npy = None
-counter = 0
 
-N_chunck = 3
+N_chunck = len(xtrain_files)
+print('N_chunck', N_chunck)
 
-for i, j in tqdm(zip(xtrain_files, ytrain_files)):
+for i in range(1, N_chunck+1):
+    xtrain_fname = 'xtrain-{}-chunk{}.npy'.format(file_type, str(i))
+    ytrain_fname = 'ytrain-{}-chunk{}.npy'.format(file_type, str(i))
+    print(xtrain_fname)
+    print(ytrain_fname)
+
     if xtrain_npy is None:
-        xtrain_npy = np.load(i)
-        ytrain_npy = np.load(j)
+        xtrain_npy = np.load(xtrain_fname)
+        ytrain_npy = np.load(ytrain_files)
     else:
-        xtrain_npy = np.concatenate((xtrain_npy, np.load(i)), axis=0)
-        ytrain_npy = np.concatenate((ytrain_npy, np.load(j)), axis=0)
+        xtrain_npy = np.concatenate((xtrain_npy, np.load(xtrain_fname)), axis=0)
+        ytrain_npy = np.concatenate((ytrain_npy, np.load(ytrain_fname)), axis=0)
         print(xtrain_npy.shape)
         print(ytrain_npy.shape)
-    counter += 1
-    if counter == N_chunck:
-        break
+
 print(xtrain_npy.shape)
 print(ytrain_npy.shape)
 
