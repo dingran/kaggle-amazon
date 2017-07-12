@@ -3,6 +3,7 @@ import glob
 import os
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import fbeta_score
+from tqdm import tqdm
 
 from keras.applications.inception_v3 import InceptionV3
 from keras.preprocessing import image
@@ -31,13 +32,15 @@ counter = 0
 
 N_chunck = 3
 
-for i, j in zip(xtrain_files, ytrain_files):
+for i, j in tqdm(zip(xtrain_files, ytrain_files)):
     if xtrain_npy is None:
         xtrain_npy = np.load(i)
         ytrain_npy = np.load(j)
     else:
         xtrain_npy = np.concatenate((xtrain_npy, np.load(i)), axis=0)
         ytrain_npy = np.concatenate((ytrain_npy, np.load(j)), axis=0)
+        print(xtrain_npy.shape)
+        print(ytrain_npy.shape)
     counter += 1
     if counter == N_chunck:
         break
