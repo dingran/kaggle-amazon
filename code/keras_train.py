@@ -13,6 +13,7 @@ from keras.callbacks import ModelCheckpoint, Callback, EarlyStopping
 from keras.preprocessing.image import ImageDataGenerator
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
+code_dir = dir_path
 data_dir = os.path.join(dir_path, '../input')
 print(data_dir)
 
@@ -84,6 +85,7 @@ for layer in base_model.layers:
 # compile the model (should be done *after* setting layers to non-trainable)
 model.compile(optimizer='adam', loss='binary_crossentropy')
 
+import scipy.optimize as so
 
 # defining a set of callbacks
 class f2beta(Callback):
@@ -96,8 +98,10 @@ class f2beta(Callback):
         x_val = self.xval
         y_true = self.yval
         y_pred = self.model.predict(x_val)
-        y_pred = (y_pred > 0.2).astype(int)
+
+        y_pred = (y_pred > 0.2).astpe(int)
         score = fbeta_score(y_true, y_pred, beta=2, average='samples')
+
         return score
 
     def on_epoch_end(self, epoch, logs={}):
@@ -108,8 +112,8 @@ class f2beta(Callback):
 
 beta_score = f2beta(xvalid, yvalid)
 
-checkpoint = ModelCheckpoint("model-{val_loss:.5f}.hdf5", monitor='val_loss', verbose=1, save_best_only=True,
-                             mode='auto')
+checkpoint = ModelCheckpoint(os.path.join(code_dir, "model-{val_loss:.5f}.hdf5"),
+                             monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
 
 earlystop = EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
 
@@ -129,7 +133,7 @@ else:
         featurewise_std_normalization=False,  # divide inputs by std of the dataset
         samplewise_std_normalization=False,  # divide each input by its std
         zca_whitening=False,  # apply ZCA whitening
-        rotation_range=250,  # randomly rotate images in the range (degrees, 0 to 180)
+        rotation_range=359,  # randomly rotate images in the range (degrees, 0 to 180)
         width_shift_range=0.3,  # randomly shift images horizontally (fraction of total width)
         height_shift_range=0.3,  # randomly shift images vertically (fraction of total height)
         horizontal_flip=True,  # randomly flip images
