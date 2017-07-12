@@ -25,17 +25,18 @@ code_dir = dir_path
 data_dir = os.path.join(dir_path, '../input')
 print(data_dir)
 
-X_test = []
 test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
+X_test = np.empty([len(test_file_list), 299, 299, 3])
 test_filenames = []
+i=0
 for t in tqdm(test_file_list):
     filename = os.path.basename(t).replace('.jpg', '')
     test_filenames.append(filename)
     image = io.imread(t)
     image = resize(image, (299, 299))  # for InceptionV3
-    X_test.append(image)
+    X_test[i, :, :, :] = image
 
-X_test = np.stack(X_test, axis=0)
+# X_test = np.stack(X_test, axis=0)
 print(X_test.shape)
 
 X_test = X_test.astype('float32')

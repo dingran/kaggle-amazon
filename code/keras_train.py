@@ -79,12 +79,12 @@ else:
 
     train_label['y'] = train_label.tags.apply(tags_to_vec)
 
-    N_train_limit = 2000e9
+    N_train_limit = 2000
     N_sample = min(N_train_limit, train_label.shape[0])
     X_train = np.empty([N_sample, 299, 299, 3])
     y_train = np.empty([N_sample, 17])
     i = 0
-    for idx, row in tqdm(train_label.iterrows(), total=min(N_train_limit, train_label.shape[0])):
+    for idx, row in tqdm(train_label.iterrows(), total=N_sample):
         image = io.imread(
             os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
         image = resize(image, (299, 299))  # for InceptionV3
@@ -204,3 +204,23 @@ else:
                         steps_per_epoch=xtrain.shape[0] // batch_size,
                         epochs=epochs, callbacks=[checkpoint, beta_score, earlystop],
                         validation_data=(xvalid, yvalid))
+
+# raw predictions for optimizing thresholds later
+
+model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
+if model_paths:
+    model_path = min(model_paths)
+    print('loading ', model_path)
+    model_name = os.path.basename(model_path).replace('.hdf5', '')
+else:
+    print('no model available, abort')
+    assert 0
+
+ypred_train = model.predict(xtrain, verbose=1)
+ypred_valid = model.predict(xvalid, verbose=1)
+
+raw_prediction_filename = os.path.join(data_dir, '../output/raw_pred_{}.pkl'.format(model_name))
+
+import pickle
+with open(raw_prediction_filename, 'wb') as f:
+    pickle.dump((ypred_train, ypred_valid, ytrain, yvalid), f)
