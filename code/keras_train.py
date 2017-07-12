@@ -38,7 +38,7 @@ if 0:
     N_chunck = len(xtrain_files)
     print('N_chunck', N_chunck)
 
-    for i in range(1, N_chunck+1):
+    for i in range(1, N_chunck + 1):
         xtrain_fname = os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, str(i)))
         ytrain_fname = os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, str(i)))
         print(xtrain_fname)
@@ -70,14 +70,12 @@ else:
     labels = labels_str.split(', ')
     label_map = {x: labels.index(x) for x in labels}
 
-
     def tags_to_vec(tags):
         tags_list = tags.split(' ')
         vec = np.zeros(17)
         for t in tags_list:
             vec[label_map[t]] = 1
         return vec
-
 
     train_label['y'] = train_label.tags.apply(tags_to_vec)
 
@@ -86,7 +84,8 @@ else:
     N_train_limit = 2000e9
     i = 0
     for idx, row in tqdm(train_label.iterrows(), total=min(N_train_limit, train_label.shape[0])):
-        image = io.imread( os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
+        image = io.imread(
+            os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
         image = resize(image, (299, 299))  # for InceptionV3
         X_train.append(image)
         y_train.append(row['y'])
@@ -106,7 +105,6 @@ else:
     except:
         pass
     gc.collect()
-
 
 xtrain = xtrain.astype('float32')
 xvalid = xvalid.astype('float32')
@@ -142,6 +140,7 @@ for layer in base_model.layers:
 model.compile(optimizer='adam', loss='binary_crossentropy')
 
 import scipy.optimize as so
+
 
 # defining a set of callbacks
 class f2beta(Callback):
