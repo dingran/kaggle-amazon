@@ -34,8 +34,8 @@ N_chunck = len(xtrain_files)
 print('N_chunck', N_chunck)
 
 for i in range(1, N_chunck+1):
-    xtrain_fname = 'xtrain-{}-chunk{}.npy'.format(file_type, str(i))
-    ytrain_fname = 'ytrain-{}-chunk{}.npy'.format(file_type, str(i))
+    xtrain_fname = os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, str(i)))
+    ytrain_fname = os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, str(i)))
     print(xtrain_fname)
     print(ytrain_fname)
 
