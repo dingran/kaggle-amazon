@@ -4,12 +4,22 @@ import pandas as pd
 from sklearn.metrics import fbeta_score
 from tqdm import tqdm
 import os
-
+import glob
 from tag_translation import train_label, tags_to_vec, map_predictions
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 code_dir = dir_path
 data_dir = os.path.join(dir_path, '../input')
+
+
+model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
+if model_paths:
+    model_path = min(model_paths)
+    print('loading ', model_path)
+    model_name = os.path.basename(model_path).replace('.hdf5', '')
+else:
+    print('no model available, abort')
+    assert 0
 
 model_name = 'model-0.14135'
 raw_prediction_on_train_set = 'raw_pred_{}.pkl'.format(model_name)
