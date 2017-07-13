@@ -82,8 +82,8 @@ else:
 
     N_train_limit = int(2e9)
     N_sample = min(N_train_limit, train_label.shape[0])
-    X_train = np.empty([N_sample, 299, 299, 3])
-    y_train = np.empty([N_sample, 17])
+    X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
+    y_train = np.empty([N_sample, 17], dtype='float32')
     i = 0
     for idx, row in tqdm(train_label.iterrows(), total=N_sample):
         image = io.imread(
@@ -98,6 +98,7 @@ else:
     # X_train = np.stack(X_train, axis=0)
     # y_train = np.stack(y_train, axis=0)
     print(X_train.shape, y_train.shape)
+    print(X_train.dtype, y_train.dtype)
 
     rand_idx = np.arange(0, N_sample)
     shuffle(rand_idx)
