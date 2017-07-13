@@ -80,7 +80,7 @@ else:
 
     train_label['y'] = train_label.tags.apply(tags_to_vec)
 
-    N_train_limit = int(2e4)
+    N_train_limit = int(2e9)
     N_sample = min(N_train_limit, train_label.shape[0])
     X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
     y_train = np.empty([N_sample, 17], dtype='float32')
@@ -182,7 +182,7 @@ beta_score = f2beta(xvalid, yvalid)
 checkpoint = ModelCheckpoint(os.path.join(code_dir, "model-{val_loss:.5f}.hdf5"),
                              monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
 
-earlystop = EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
+earlystop = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=0, mode='auto')
 
 if not data_augmentation:
     print('Not using data augmentation.')

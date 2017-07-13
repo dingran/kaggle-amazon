@@ -50,17 +50,14 @@ else:
 model = load_model(model_path)
 
 # all test files
-test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
-
-ytest_record = []
-test_filename_record = []
 
 def assemble_batch(sub_list):
+    print('sublist length ', len(sub_list))
     # X_test = np.empty([len(test_file_list), 299, 299, 3])
-    X_test = np.empty([len(sub_list), 299, 299, 3])
+    X_test = np.empty([len(sub_list), 299, 299, 3], dtype='float32')
     test_filenames = []
     i=0
-    for t in tqdm(test_file_list):
+    for t in tqdm(sub_list):
         filename = os.path.basename(t).replace('.jpg', '')
         test_filenames.append(filename)
         image = io.imread(t)
@@ -69,22 +66,42 @@ def assemble_batch(sub_list):
 
     # X_test = np.stack(X_test, axis=0)
     print(X_test.shape)
-    X_test = X_test.astype('float32')
+    print(X_test.dtype)
 
-    return X_test
+    return X_test, test_filenames
 
-N_batch = len(test_file_list)/1000
+test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
+N_test = len(test_file_list)
+endpoints = list(range(N_test))[::1000] + [N_test]
+print(endpoints)
 
-X_test /= 255
-ytest = model.predict(X_test, verbose=1)
-predicted_labels = map_predictions(ytest, labels)
-predicted_labels_str = [' '.join(x) for x in predicted_labels]
+ytest_record = []
+test_filename_record = []
+df_list = []
+for i in tqdm(range(len(endpoints)-1)):
+    print('batch{}'.format(i), endpoints[i], endpoints[i+1])
+    sub_list = test_file_list[endpoints[i]:endpoints[i + 1]]
+    X_test_batch, test_filenames_batch = assemble_batch(sub_list)
+    X_test_batch /= 255
+    ytest_batch = model.predict(X_test_batch, verbose=1)
+    predicted_labels = map_predictions(ytest_batch, labels)
+    predicted_labels_str = [' '.join(x) for x in predicted_labels]
+    df_batch = pd.DataFrame({'image_name': test_filenames_batch, 'tags': predicted_labels_str})
 
-df = pd.DataFrame({'image_name': test_filenames, 'tags': predicted_labels_str})
+    df_list.append(df_batch)
+    ytest_record.append(ytest_batch)
+    test_filename_record.append(test_filenames_batch)
 
 prediction_filename = os.path.join(data_dir, '../output/keras_pred_{}.csv'.format(model_name))
 
+df = pd.concat(df_list, axis=0)
+print(df.shape)
 df.to_csv(prediction_filename, index=False)
+
+ytest = np.concatenate(ytest_record, axis=0)
+test_filenames = np.concatenate(test_filename_record)
+print(ytest.shape)
+print(test_filenames.shape)
 
 with open(prediction_filename.replace('.csv', '.pkl'), 'wb') as f:
     pickle.dump((test_filenames, ytest), f)
