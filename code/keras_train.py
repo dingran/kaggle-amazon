@@ -12,6 +12,7 @@ from sklearn.metrics import fbeta_score
 from tqdm import tqdm
 from numpy.random import shuffle
 
+import keras
 from keras.models import load_model
 from keras.applications.inception_v3 import InceptionV3
 from keras.preprocessing import image
@@ -29,11 +30,13 @@ print(data_dir)
 file_type = 'jpg'
 print('file type: ', file_type)
 
+resuming = True
+new_learning_rate = None
+new_learning_rate = 0.0001
+do_training = True
+N_train_limit = int(2e9)
 
-
-N_train_limit = int(200)
-
-if 0:
+if 1:
     N_sample = min(N_train_limit, train_label.shape[0])
     X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
     y_train = np.empty([N_sample, 17], dtype='float32')
@@ -141,21 +144,14 @@ if model_paths:
 else:
     print('no model available, abort')
 
-
-resuming = True
-
-new_learning_rate = None
-new_learning_rate = 0.0001
-
-do_training = False
 if do_training:
     batch_size = 32
     num_classes = 17
     epochs = 200
     data_augmentation = True
 
-
     if not resuming:  # create fresh model
+        print('creating fresh model')
         # create the base pre-trained model
         base_model = InceptionV3(weights='imagenet', include_top=False)
 
@@ -180,8 +176,11 @@ if do_training:
         model.compile(optimizer='adam', loss='binary_crossentropy')
 
     else:
-        if new_learning_rate is not None: # not sure if this works
-            model.optimizer.lr.set_value(new_learning_rate)
+        print('resuming with loaded model')
+        if new_learning_rate is not None:  # not sure if this works
+            print('compiling model with new learning rate {}'.format(new_learning_rate))
+            adam_opt = keras.optimizers.Adam(lr=new_learning_rate)
+            model.compile(optimizer=adam_opt, loss='binary_crossentropy')
 
     # defining a set of callbacks
     class f2beta(Callback):
