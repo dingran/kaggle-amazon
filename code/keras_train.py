@@ -80,7 +80,7 @@ else:
 
     train_label['y'] = train_label.tags.apply(tags_to_vec)
 
-    N_train_limit = int(2e9)
+    N_train_limit = int(2e4)
     N_sample = min(N_train_limit, train_label.shape[0])
     X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
     y_train = np.empty([N_sample, 17], dtype='float32')

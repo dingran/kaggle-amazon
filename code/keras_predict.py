@@ -25,23 +25,20 @@ code_dir = dir_path
 data_dir = os.path.join(dir_path, '../input')
 print(data_dir)
 
-test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
-X_test = np.empty([len(test_file_list), 299, 299, 3])
-test_filenames = []
-i=0
-for t in tqdm(test_file_list):
-    filename = os.path.basename(t).replace('.jpg', '')
-    test_filenames.append(filename)
-    image = io.imread(t)
-    image = resize(image, (299, 299))  # for InceptionV3
-    X_test[i, :, :, :] = image
+# prepare lable decoder
+train_label = pd.read_csv(os.path.join(data_dir, 'train_v2.csv'))
+labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, clear, cloudy, conventional_mine, cultivation, habitation, haze, partly_cloudy, primary, road, selective_logging, slash_burn, water'
+labels = labels_str.split(', ')
+label_map = {x: labels.index(x) for x in labels}
 
-# X_test = np.stack(X_test, axis=0)
-print(X_test.shape)
+def map_predictions(predictions, labels_map, thresholds=np.ones(17) * 0.2):
+    predictions_labels = []
+    for prediction in predictions:
+        labels = [labels_map[i] for i, value in enumerate(prediction) if value > thresholds[i]]
+        predictions_labels.append(labels)
+    return predictions_labels
 
-X_test = X_test.astype('float32')
-X_test /= 255
-
+# load model
 model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
 if model_paths:
     model_path = min(model_paths)
@@ -50,25 +47,36 @@ if model_paths:
 else:
     print('no model available, abort')
     assert 0
-
 model = load_model(model_path)
 
+# all test files
+test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
+
+ytest_record = []
+test_filename_record = []
+
+def assemble_batch(sub_list):
+    # X_test = np.empty([len(test_file_list), 299, 299, 3])
+    X_test = np.empty([len(sub_list), 299, 299, 3])
+    test_filenames = []
+    i=0
+    for t in tqdm(test_file_list):
+        filename = os.path.basename(t).replace('.jpg', '')
+        test_filenames.append(filename)
+        image = io.imread(t)
+        image = resize(image, (299, 299))  # for InceptionV3
+        X_test[i, :, :, :] = image
+
+    # X_test = np.stack(X_test, axis=0)
+    print(X_test.shape)
+    X_test = X_test.astype('float32')
+
+    return X_test
+
+N_batch = len(test_file_list)/1000
+
+X_test /= 255
 ytest = model.predict(X_test, verbose=1)
-
-train_label = pd.read_csv(os.path.join(data_dir, 'train_v2.csv'))
-labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, clear, cloudy, conventional_mine, cultivation, habitation, haze, partly_cloudy, primary, road, selective_logging, slash_burn, water'
-labels = labels_str.split(', ')
-label_map = {x: labels.index(x) for x in labels}
-
-
-def map_predictions(predictions, labels_map, thresholds=np.ones(17) * 0.2):
-    predictions_labels = []
-    for prediction in predictions:
-        labels = [labels_map[i] for i, value in enumerate(prediction) if value > thresholds[i]]
-        predictions_labels.append(labels)
-
-    return predictions_labels
-
 predicted_labels = map_predictions(ytest, labels)
 predicted_labels_str = [' '.join(x) for x in predicted_labels]
 
