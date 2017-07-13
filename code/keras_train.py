@@ -88,7 +88,7 @@ else:
     for idx, row in tqdm(train_label.iterrows(), total=N_sample):
         image = io.imread(
             os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
-        image = resize(image, (299, 299))  # for InceptionV3
+        image = resize(image, (299, 299), mode='constant')  # for InceptionV3
         X_train[i, :, :, :] = image
         y_train[i, :] = row['y']
         i += 1
