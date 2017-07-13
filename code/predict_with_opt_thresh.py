@@ -21,7 +21,7 @@ else:
     print('no model available, abort')
     assert 0
 
-model_name = 'model-0.14135'
+# model_name = 'model-0.14135'
 raw_prediction_on_train_set = 'raw_pred_{}.pkl'.format(model_name)
 
 special_str = ''
