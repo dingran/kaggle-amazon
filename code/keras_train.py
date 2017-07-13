@@ -229,7 +229,7 @@ else:
 ypred_train = model.predict(xtrain, verbose=1)
 ypred_valid = model.predict(xvalid, verbose=1)
 
-raw_prediction_filename = os.path.join(data_dir, '../output/raw_pred_{}.pkl'.format(model_name))
+raw_prediction_filename = os.path.join(code_dir, 'raw_pred_{}.pkl'.format(model_name))
 
 import pickle
 with open(raw_prediction_filename, 'wb') as f:
