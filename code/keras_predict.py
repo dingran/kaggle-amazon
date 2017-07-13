@@ -40,20 +40,6 @@ def map_predictions(predictions, labels_map, thresholds=np.ones(17) * 0.2):
     return predictions_labels
 
 
-# load model
-model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
-if model_paths:
-    model_path = min(model_paths)
-    print('loading ', model_path)
-    model_name = os.path.basename(model_path).replace('.hdf5', '')
-else:
-    print('no model available, abort')
-    assert 0
-model = load_model(model_path)
-
-
-# all test files
-
 def assemble_batch(sub_list):
     print('sublist length ', len(sub_list))
     # X_test = np.empty([len(test_file_list), 299, 299, 3])
@@ -75,6 +61,21 @@ def assemble_batch(sub_list):
 
 
 test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
+predict_on_train = True
+if predict_on_train:
+    print('!!!!!!!!!!!!!!!!!!! predicting on training set')
+    test_file_list = glob.glob(os.path.join(data_dir, 'train-jpg/*.jpg'))
+
+# load model
+model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
+if model_paths:
+    model_path = min(model_paths)
+    print('loading ', model_path)
+    model_name = os.path.basename(model_path).replace('.hdf5', '')
+else:
+    print('no model available, abort')
+    assert 0
+model = load_model(model_path)
 
 batch_method = 0
 if batch_method:
@@ -113,9 +114,14 @@ else:
     ytest = model.predict(X_test, verbose=1)
     predicted_labels = map_predictions(ytest, labels)
     predicted_labels_str = [' '.join(x) for x in predicted_labels]
-    df= pd.DataFrame({'image_name': test_filenames, 'tags': predicted_labels_str})
+    df = pd.DataFrame({'image_name': test_filenames, 'tags': predicted_labels_str})
 
-prediction_filename = os.path.join(data_dir, '../output/keras_pred_{}_BM{}.csv'.format(model_name, str(batch_method)))
+special_str = ''
+if predict_on_train:
+    special_str = '_on_train'
+
+prediction_filename = os.path.join(data_dir, '../output/keras_pred_{}{}_BM{}.csv'.format(model_name, special_str,
+                                                                                         str(batch_method)))
 df.to_csv(prediction_filename, index=False)
 with open(prediction_filename.replace('.csv', '.pkl'), 'wb') as f:
     pickle.dump((test_filenames, ytest), f)

@@ -10,6 +10,7 @@ from sklearn.metrics import fbeta_score
 from tqdm import tqdm
 from numpy.random import shuffle
 
+from keras.models import load_model
 from keras.applications.inception_v3 import InceptionV3
 from keras.preprocessing import image
 from keras.models import Model
@@ -26,104 +27,65 @@ print(data_dir)
 file_type = 'jpg'
 print('file type: ', file_type)
 
-if 0:
-    xtrain_files = glob.glob(os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, '*')))
-    ytrain_files = glob.glob(os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, '*')))
+train_label = pd.read_csv(os.path.join(data_dir, 'train_v2.csv'))
+labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, clear, cloudy, conventional_mine, cultivation, habitation, haze, partly_cloudy, primary, road, selective_logging, slash_burn, water'
+labels = labels_str.split(', ')
+label_map = {x: labels.index(x) for x in labels}
 
-    print(len(xtrain_files))
-    print(len(ytrain_files))
+def tags_to_vec(tags):
+    tags_list = tags.split(' ')
+    vec = np.zeros(17)
+    for t in tags_list:
+        vec[label_map[t]] = 1
+    return vec
 
-    xtrain_npy = None
-    ytrain_npy = None
+train_label['y'] = train_label.tags.apply(tags_to_vec)
 
-    N_chunck = len(xtrain_files)
-    print('N_chunck', N_chunck)
+N_train_limit = int(2e9)
+N_sample = min(N_train_limit, train_label.shape[0])
+X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
+y_train = np.empty([N_sample, 17], dtype='float32')
+i = 0
+for idx, row in tqdm(train_label.iterrows(), total=N_sample):
+    image = io.imread(
+        os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
+    image = resize(image, (299, 299), mode='constant')  # for InceptionV3
+    X_train[i, :, :, :] = image
+    y_train[i, :] = row['y']
+    i += 1
+    if i == N_train_limit:
+        break
 
-    for i in range(1, N_chunck + 1):
-        xtrain_fname = os.path.join(data_dir, 'xtrain-{}-chunk{}.npy'.format(file_type, str(i)))
-        ytrain_fname = os.path.join(data_dir, 'ytrain-{}-chunk{}.npy'.format(file_type, str(i)))
-        print(xtrain_fname)
-        print(ytrain_fname)
+# X_train = np.stack(X_train, axis=0)
+# y_train = np.stack(y_train, axis=0)
+print(X_train.shape, y_train.shape)
+print(X_train.dtype, y_train.dtype)
 
-        if xtrain_npy is None:
-            xtrain_npy = np.load(xtrain_fname)
-            ytrain_npy = np.load(ytrain_fname)
-        else:
-            xtrain_npy = np.concatenate((xtrain_npy, np.load(xtrain_fname)), axis=0)
-            ytrain_npy = np.concatenate((ytrain_npy, np.load(ytrain_fname)), axis=0)
-            print(xtrain_npy.shape)
-            print(ytrain_npy.shape)
+rand_idx = np.arange(0, N_sample)
+shuffle(rand_idx)
 
-    print(xtrain_npy.shape)
-    print(ytrain_npy.shape)
+N_train= int(0.8*N_sample)
 
+xtrain = X_train[rand_idx[:N_train]]
+ytrain = y_train[rand_idx[:N_train]]
+xvalid= X_train[rand_idx[N_train:]]
+yvalid= y_train[rand_idx[N_train:]]
+# xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
+print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
 
-    def image_normalization(xdata):
-        pass
-
-
-    xtrain, xvalid, ytrain, yvalid = train_test_split(xtrain_npy, ytrain_npy, test_size=0.2)
-    print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
-
-else:
-    train_label = pd.read_csv(os.path.join(data_dir, 'train_v2.csv'))
-    labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, clear, cloudy, conventional_mine, cultivation, habitation, haze, partly_cloudy, primary, road, selective_logging, slash_burn, water'
-    labels = labels_str.split(', ')
-    label_map = {x: labels.index(x) for x in labels}
-
-    def tags_to_vec(tags):
-        tags_list = tags.split(' ')
-        vec = np.zeros(17)
-        for t in tags_list:
-            vec[label_map[t]] = 1
-        return vec
-
-    train_label['y'] = train_label.tags.apply(tags_to_vec)
-
-    N_train_limit = int(2e9)
-    N_sample = min(N_train_limit, train_label.shape[0])
-    X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
-    y_train = np.empty([N_sample, 17], dtype='float32')
-    i = 0
-    for idx, row in tqdm(train_label.iterrows(), total=N_sample):
-        image = io.imread(
-            os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
-        image = resize(image, (299, 299), mode='constant')  # for InceptionV3
-        X_train[i, :, :, :] = image
-        y_train[i, :] = row['y']
-        i += 1
-        if i == N_train_limit:
-            break
-
-    # X_train = np.stack(X_train, axis=0)
-    # y_train = np.stack(y_train, axis=0)
-    print(X_train.shape, y_train.shape)
-    print(X_train.dtype, y_train.dtype)
-
-    rand_idx = np.arange(0, N_sample)
-    shuffle(rand_idx)
-
-    N_train= int(0.8*N_sample)
-
-    xtrain = X_train[rand_idx[:N_train]]
-    ytrain = y_train[rand_idx[:N_train]]
-    xvalid= X_train[rand_idx[N_train:]]
-    yvalid= y_train[rand_idx[N_train:]]
-    # xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
-    print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
-
-    try:
-        del X_train, y_train
-    except:
-        pass
-    gc.collect()
+try:
+    del X_train, y_train
+except:
+    pass
+gc.collect()
 
 xtrain = xtrain.astype('float32')
 xvalid = xvalid.astype('float32')
 xtrain /= 255
 xvalid /= 255
 
-if 0:
+do_training = False
+if do_training:
     batch_size = 32
     num_classes = 17
     epochs = 200
@@ -217,16 +179,18 @@ if 0:
                             epochs=epochs, callbacks=[checkpoint, beta_score, earlystop],
                             validation_data=(xvalid, yvalid))
 
-# raw predictions for optimizing thresholds later
+if not do_training:
+    # raw predictions for optimizing thresholds later
+    model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
+    if model_paths:
+        model_path = min(model_paths)
+        print('loading ', model_path)
+        model_name = os.path.basename(model_path).replace('.hdf5', '')
+    else:
+        print('no model available, abort')
+        assert 0
 
-model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
-if model_paths:
-    model_path = min(model_paths)
-    print('loading ', model_path)
-    model_name = os.path.basename(model_path).replace('.hdf5', '')
-else:
-    print('no model available, abort')
-    assert 0
+    model = load_model(model_path)
 
 ypred_train = model.predict(xtrain, verbose=1)
 ypred_valid = model.predict(xvalid, verbose=1)
