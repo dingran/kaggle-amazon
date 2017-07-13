@@ -31,12 +31,14 @@ labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, cle
 labels = labels_str.split(', ')
 label_map = {x: labels.index(x) for x in labels}
 
+
 def map_predictions(predictions, labels_map, thresholds=np.ones(17) * 0.2):
     predictions_labels = []
     for prediction in predictions:
         labels = [labels_map[i] for i, value in enumerate(prediction) if value > thresholds[i]]
         predictions_labels.append(labels)
     return predictions_labels
+
 
 # load model
 model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
@@ -49,6 +51,7 @@ else:
     assert 0
 model = load_model(model_path)
 
+
 # all test files
 
 def assemble_batch(sub_list):
@@ -56,12 +59,12 @@ def assemble_batch(sub_list):
     # X_test = np.empty([len(test_file_list), 299, 299, 3])
     X_test = np.empty([len(sub_list), 299, 299, 3], dtype='float32')
     test_filenames = []
-    i=0
+    i = 0
     for t in tqdm(sub_list):
         filename = os.path.basename(t).replace('.jpg', '')
         test_filenames.append(filename)
         image = io.imread(t)
-        image = resize(image, (299, 299))  # for InceptionV3
+        image = resize(image, (299, 299), mode='constant')  # for InceptionV3
         X_test[i, :, :, :] = image
 
     # X_test = np.stack(X_test, axis=0)
@@ -70,38 +73,49 @@ def assemble_batch(sub_list):
 
     return X_test, test_filenames
 
+
 test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
-N_test = len(test_file_list)
-endpoints = list(range(N_test))[::1000] + [N_test]
-print(endpoints)
 
-ytest_record = []
-test_filename_record = []
-df_list = []
-for i in tqdm(range(len(endpoints)-1)):
-    print('batch{}'.format(i), endpoints[i], endpoints[i+1])
-    sub_list = test_file_list[endpoints[i]:endpoints[i + 1]]
-    X_test_batch, test_filenames_batch = assemble_batch(sub_list)
-    X_test_batch /= 255
-    ytest_batch = model.predict(X_test_batch, verbose=1)
-    predicted_labels = map_predictions(ytest_batch, labels)
+batch_method = 0
+if batch_method:
+    N_test = len(test_file_list)
+    endpoints = list(range(N_test))[::1000] + [N_test]
+    print(endpoints)
+
+    ytest_record = []
+    test_filename_record = []
+    df_list = []
+    for i in tqdm(range(len(endpoints) - 1)):
+        print('batch{}'.format(i), endpoints[i], endpoints[i + 1])
+        sub_list = test_file_list[endpoints[i]:endpoints[i + 1]]
+        X_test_batch, test_filenames_batch = assemble_batch(sub_list)
+        X_test_batch /= 255
+        ytest_batch = model.predict(X_test_batch, verbose=1)
+        predicted_labels = map_predictions(ytest_batch, labels)
+        predicted_labels_str = [' '.join(x) for x in predicted_labels]
+        df_batch = pd.DataFrame({'image_name': test_filenames_batch, 'tags': predicted_labels_str})
+
+        df_list.append(df_batch)
+        ytest_record.append(ytest_batch)
+        test_filename_record.append(test_filenames_batch)
+
+    df = pd.concat(df_list, axis=0)
+    print(df.shape)
+
+    ytest = np.concatenate(ytest_record, axis=0)
+    test_filenames = np.concatenate(test_filename_record)
+    print(ytest.shape)
+    print(test_filenames.shape)
+else:
+
+    X_test, test_filenames = assemble_batch(test_file_list)
+    X_test /= 255
+    ytest = model.predict(X_test, verbose=1)
+    predicted_labels = map_predictions(ytest, labels)
     predicted_labels_str = [' '.join(x) for x in predicted_labels]
-    df_batch = pd.DataFrame({'image_name': test_filenames_batch, 'tags': predicted_labels_str})
+    df= pd.DataFrame({'image_name': test_filenames, 'tags': predicted_labels_str})
 
-    df_list.append(df_batch)
-    ytest_record.append(ytest_batch)
-    test_filename_record.append(test_filenames_batch)
-
-prediction_filename = os.path.join(data_dir, '../output/keras_pred_{}.csv'.format(model_name))
-
-df = pd.concat(df_list, axis=0)
-print(df.shape)
+prediction_filename = os.path.join(data_dir, '../output/keras_pred_{}_BM{}.csv'.format(model_name, str(batch_method)))
 df.to_csv(prediction_filename, index=False)
-
-ytest = np.concatenate(ytest_record, axis=0)
-test_filenames = np.concatenate(test_filename_record)
-print(ytest.shape)
-print(test_filenames.shape)
-
 with open(prediction_filename.replace('.csv', '.pkl'), 'wb') as f:
     pickle.dump((test_filenames, ytest), f)
