@@ -123,98 +123,99 @@ xvalid = xvalid.astype('float32')
 xtrain /= 255
 xvalid /= 255
 
-batch_size = 32
-num_classes = 17
-epochs = 200
-data_augmentation = True
+if 0:
+    batch_size = 32
+    num_classes = 17
+    epochs = 200
+    data_augmentation = True
 
-# create the base pre-trained model
-base_model = InceptionV3(weights='imagenet', include_top=False)
+    # create the base pre-trained model
+    base_model = InceptionV3(weights='imagenet', include_top=False)
 
-# add a global spatial average pooling layer
-x = base_model.output
-x = GlobalAveragePooling2D()(x)
-# let's add a fully-connected layer
-x = Dense(1024, activation='relu')(x)
-x = Dropout(0.5)(x)
-x = Dense(1024, activation="relu")(x)
-predictions = Dense(17, activation='sigmoid')(x)
+    # add a global spatial average pooling layer
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+    # let's add a fully-connected layer
+    x = Dense(1024, activation='relu')(x)
+    x = Dropout(0.5)(x)
+    x = Dense(1024, activation="relu")(x)
+    predictions = Dense(17, activation='sigmoid')(x)
 
-# this is the model we will train
-model = Model(inputs=base_model.input, outputs=predictions)
+    # this is the model we will train
+    model = Model(inputs=base_model.input, outputs=predictions)
 
-# first: train only the top layers (which were randomly initialized)
-# i.e. freeze all convolutional InceptionV3 layers
-for layer in base_model.layers:
-    layer.trainable = False
+    # first: train only the top layers (which were randomly initialized)
+    # i.e. freeze all convolutional InceptionV3 layers
+    for layer in base_model.layers:
+        layer.trainable = False
 
-# compile the model (should be done *after* setting layers to non-trainable)
-model.compile(optimizer='adam', loss='binary_crossentropy')
+    # compile the model (should be done *after* setting layers to non-trainable)
+    model.compile(optimizer='adam', loss='binary_crossentropy')
 
-import scipy.optimize as so
-
-
-# defining a set of callbacks
-class f2beta(Callback):
-    def __init__(self, xval, yval):
-        self.xval = xval
-        self.yval = yval
-        self.maps = []
-
-    def eval_map(self):
-        x_val = self.xval
-        y_true = self.yval
-        y_pred = self.model.predict(x_val)
-
-        y_pred = (y_pred > 0.2).astype(int)
-        score = fbeta_score(y_true, y_pred, beta=2, average='samples')
-
-        return score
-
-    def on_epoch_end(self, epoch, logs={}):
-        score = self.eval_map()
-        print("f2beta for epoch %d is %f" % (epoch, score))
-        self.maps.append(score)
+    import scipy.optimize as so
 
 
-beta_score = f2beta(xvalid, yvalid)
+    # defining a set of callbacks
+    class f2beta(Callback):
+        def __init__(self, xval, yval):
+            self.xval = xval
+            self.yval = yval
+            self.maps = []
 
-checkpoint = ModelCheckpoint(os.path.join(code_dir, "model-{val_loss:.5f}.hdf5"),
-                             monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
+        def eval_map(self):
+            x_val = self.xval
+            y_true = self.yval
+            y_pred = self.model.predict(x_val)
 
-earlystop = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=0, mode='auto')
+            y_pred = (y_pred > 0.2).astype(int)
+            score = fbeta_score(y_true, y_pred, beta=2, average='samples')
 
-if not data_augmentation:
-    print('Not using data augmentation.')
-    model.fit(xtrain, ytrain,
-              batch_size=batch_size,
-              epochs=epochs, callbacks=[checkpoint, beta_score, earlystop],
-              validation_data=(xvalid, yvalid),
-              shuffle=True)
-else:
-    print('Using real-time data augmentation.')
-    # This will do preprocessing and realtime data augmentation:
-    datagen = ImageDataGenerator(
-        featurewise_center=False,  # set input mean to 0 over the dataset
-        samplewise_center=False,  # set each sample mean to 0
-        featurewise_std_normalization=False,  # divide inputs by std of the dataset
-        samplewise_std_normalization=False,  # divide each input by its std
-        zca_whitening=False,  # apply ZCA whitening
-        rotation_range=359,  # randomly rotate images in the range (degrees, 0 to 180)
-        width_shift_range=0.3,  # randomly shift images horizontally (fraction of total width)
-        height_shift_range=0.3,  # randomly shift images vertically (fraction of total height)
-        horizontal_flip=True,  # randomly flip images
-        vertical_flip=True)  # randomly flip images
+            return score
 
-    # Compute quantities required for feature-wise normalization
-    # (std, mean, and principal components if ZCA whitening is applied).
-    datagen.fit(xtrain)
+        def on_epoch_end(self, epoch, logs={}):
+            score = self.eval_map()
+            print("f2beta for epoch %d is %f" % (epoch, score))
+            self.maps.append(score)
 
-    # Fit the model on the batches generated by datagen.flow().
-    model.fit_generator(datagen.flow(xtrain, ytrain, batch_size=batch_size),
-                        steps_per_epoch=xtrain.shape[0] // batch_size,
-                        epochs=epochs, callbacks=[checkpoint, beta_score, earlystop],
-                        validation_data=(xvalid, yvalid))
+
+    beta_score = f2beta(xvalid, yvalid)
+
+    checkpoint = ModelCheckpoint(os.path.join(code_dir, "model-{val_loss:.5f}.hdf5"),
+                                 monitor='val_loss', verbose=1, save_best_only=True, mode='auto')
+
+    earlystop = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=0, mode='auto')
+
+    if not data_augmentation:
+        print('Not using data augmentation.')
+        model.fit(xtrain, ytrain,
+                  batch_size=batch_size,
+                  epochs=epochs, callbacks=[checkpoint, beta_score, earlystop],
+                  validation_data=(xvalid, yvalid),
+                  shuffle=True)
+    else:
+        print('Using real-time data augmentation.')
+        # This will do preprocessing and realtime data augmentation:
+        datagen = ImageDataGenerator(
+            featurewise_center=False,  # set input mean to 0 over the dataset
+            samplewise_center=False,  # set each sample mean to 0
+            featurewise_std_normalization=False,  # divide inputs by std of the dataset
+            samplewise_std_normalization=False,  # divide each input by its std
+            zca_whitening=False,  # apply ZCA whitening
+            rotation_range=359,  # randomly rotate images in the range (degrees, 0 to 180)
+            width_shift_range=0.3,  # randomly shift images horizontally (fraction of total width)
+            height_shift_range=0.3,  # randomly shift images vertically (fraction of total height)
+            horizontal_flip=True,  # randomly flip images
+            vertical_flip=True)  # randomly flip images
+
+        # Compute quantities required for feature-wise normalization
+        # (std, mean, and principal components if ZCA whitening is applied).
+        datagen.fit(xtrain)
+
+        # Fit the model on the batches generated by datagen.flow().
+        model.fit_generator(datagen.flow(xtrain, ytrain, batch_size=batch_size),
+                            steps_per_epoch=xtrain.shape[0] // batch_size,
+                            epochs=epochs, callbacks=[checkpoint, beta_score, earlystop],
+                            validation_data=(xvalid, yvalid))
 
 # raw predictions for optimizing thresholds later
 
