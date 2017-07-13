@@ -16,6 +16,8 @@ from keras.layers import Dense, GlobalAveragePooling2D, Dropout
 from keras import backend as K
 from keras.callbacks import ModelCheckpoint, Callback, EarlyStopping
 from keras.preprocessing.image import ImageDataGenerator
+
+from tag_translation import train_label, tags_to_vec, map_predictions
 import pickle
 
 import glob
@@ -26,18 +28,6 @@ data_dir = os.path.join(dir_path, '../input')
 print(data_dir)
 
 # prepare lable decoder
-train_label = pd.read_csv(os.path.join(data_dir, 'train_v2.csv'))
-labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, clear, cloudy, conventional_mine, cultivation, habitation, haze, partly_cloudy, primary, road, selective_logging, slash_burn, water'
-labels = labels_str.split(', ')
-label_map = {x: labels.index(x) for x in labels}
-
-
-def map_predictions(predictions, labels_map, thresholds=np.ones(17) * 0.2):
-    predictions_labels = []
-    for prediction in predictions:
-        labels = [labels_map[i] for i, value in enumerate(prediction) if value > thresholds[i]]
-        predictions_labels.append(labels)
-    return predictions_labels
 
 
 def assemble_batch(sub_list):
@@ -52,6 +42,7 @@ def assemble_batch(sub_list):
         image = io.imread(t)
         image = resize(image, (299, 299), mode='constant')  # for InceptionV3
         X_test[i, :, :, :] = image
+        i += 1
 
     # X_test = np.stack(X_test, axis=0)
     print(X_test.shape)
@@ -61,7 +52,7 @@ def assemble_batch(sub_list):
 
 
 test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
-predict_on_train = True
+predict_on_train = False
 if predict_on_train:
     print('!!!!!!!!!!!!!!!!!!! predicting on training set')
     test_file_list = glob.glob(os.path.join(data_dir, 'train-jpg/*.jpg'))
@@ -92,7 +83,7 @@ if batch_method:
         X_test_batch, test_filenames_batch = assemble_batch(sub_list)
         X_test_batch /= 255
         ytest_batch = model.predict(X_test_batch, verbose=1)
-        predicted_labels = map_predictions(ytest_batch, labels)
+        predicted_labels = map_predictions(ytest_batch)
         predicted_labels_str = [' '.join(x) for x in predicted_labels]
         df_batch = pd.DataFrame({'image_name': test_filenames_batch, 'tags': predicted_labels_str})
 
@@ -112,7 +103,7 @@ else:
     X_test, test_filenames = assemble_batch(test_file_list)
     X_test /= 255
     ytest = model.predict(X_test, verbose=1)
-    predicted_labels = map_predictions(ytest, labels)
+    predicted_labels = map_predictions(ytest)
     predicted_labels_str = [' '.join(x) for x in predicted_labels]
     df = pd.DataFrame({'image_name': test_filenames, 'tags': predicted_labels_str})
 

@@ -3,6 +3,8 @@ import pandas as pd
 import glob
 import os
 import gc
+from tag_translation import train_label, tags_to_vec, map_predictions
+
 from skimage import io
 from skimage.transform import resize
 from sklearn.model_selection import train_test_split
@@ -27,51 +29,95 @@ print(data_dir)
 file_type = 'jpg'
 print('file type: ', file_type)
 
-train_label = pd.read_csv(os.path.join(data_dir, 'train_v2.csv'))
-labels_str = 'agriculture, artisinal_mine, bare_ground, blooming, blow_down, clear, cloudy, conventional_mine, cultivation, habitation, haze, partly_cloudy, primary, road, selective_logging, slash_burn, water'
-labels = labels_str.split(', ')
-label_map = {x: labels.index(x) for x in labels}
 
-def tags_to_vec(tags):
-    tags_list = tags.split(' ')
-    vec = np.zeros(17)
-    for t in tags_list:
-        vec[label_map[t]] = 1
-    return vec
 
-train_label['y'] = train_label.tags.apply(tags_to_vec)
+N_train_limit = int(200)
 
-N_train_limit = int(2e9)
-N_sample = min(N_train_limit, train_label.shape[0])
-X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
-y_train = np.empty([N_sample, 17], dtype='float32')
-i = 0
-for idx, row in tqdm(train_label.iterrows(), total=N_sample):
-    image = io.imread(
-        os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
-    image = resize(image, (299, 299), mode='constant')  # for InceptionV3
-    X_train[i, :, :, :] = image
-    y_train[i, :] = row['y']
-    i += 1
-    if i == N_train_limit:
-        break
+if 0:
+    N_sample = min(N_train_limit, train_label.shape[0])
+    X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
+    y_train = np.empty([N_sample, 17], dtype='float32')
+    filename_list = []
+    i = 0
+    for idx, row in tqdm(train_label.iterrows(), total=N_sample):
+        image = io.imread(
+            os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
+        image = resize(image, (299, 299), mode='constant')  # for InceptionV3
+        X_train[i, :, :, :] = image
+        y_train[i, :] = row['y']
+        filename_list.append(row['image_name'])
+        i += 1
+        if i == N_train_limit:
+            break
 
-# X_train = np.stack(X_train, axis=0)
-# y_train = np.stack(y_train, axis=0)
-print(X_train.shape, y_train.shape)
-print(X_train.dtype, y_train.dtype)
+    # X_train = np.stack(X_train, axis=0)
+    # y_train = np.stack(y_train, axis=0)
+    print(X_train.shape, y_train.shape)
+    print(X_train.dtype, y_train.dtype)
 
-rand_idx = np.arange(0, N_sample)
-shuffle(rand_idx)
+    rand_idx = np.arange(0, N_sample)
+    shuffle(rand_idx)
 
-N_train= int(0.8*N_sample)
+    N_train = int(0.8 * N_sample)
 
-xtrain = X_train[rand_idx[:N_train]]
-ytrain = y_train[rand_idx[:N_train]]
-xvalid= X_train[rand_idx[N_train:]]
-yvalid= y_train[rand_idx[N_train:]]
-# xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
-print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
+    filename_list = np.array(filename_list)
+
+    xtrain = X_train[rand_idx[:N_train]]
+    ytrain = y_train[rand_idx[:N_train]]
+    fname_train = filename_list[rand_idx[:N_train]]
+
+    xvalid = X_train[rand_idx[N_train:]]
+    yvalid = y_train[rand_idx[N_train:]]
+    fname_valid = filename_list[rand_idx[N_train:]]
+    # xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
+    print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
+
+else:
+
+    def assemble_batch(sub_list):
+        print('sublist length ', len(sub_list))
+        # X_test = np.empty([len(test_file_list), 299, 299, 3])
+        X_test = np.empty([len(sub_list), 299, 299, 3], dtype='float32')
+        test_filenames = []
+        i = 0
+        for t in tqdm(sub_list):
+            filename = os.path.basename(t).replace('.jpg', '')
+            test_filenames.append(filename)
+            image = io.imread(t)
+            image = resize(image, (299, 299), mode='constant')  # for InceptionV3
+            X_test[i, :, :, :] = image
+            i += 1
+
+        # X_test = np.stack(X_test, axis=0)
+        print(X_test.shape)
+        print(X_test.dtype)
+
+        return X_test, test_filenames
+
+
+    test_file_list = glob.glob(os.path.join(data_dir, 'train-jpg/*.jpg'))
+    N_sample = min(N_train_limit, len(test_file_list))
+
+    X_test, test_filenames = assemble_batch(test_file_list[:N_sample])
+    ytest = []
+    for t in test_filenames:
+        ytmp = train_label.loc[train_label['image_name'] == t]['y'].values[0]
+        ytest.append(ytmp)
+
+    ytest = np.stack(ytest, axis=0)
+
+    rand_idx = np.arange(0, N_sample)
+    shuffle(rand_idx)
+
+    N_train = int(0.8 * N_sample)
+
+    xtrain = X_test[rand_idx[:N_train]]
+    ytrain = ytest[rand_idx[:N_train]]
+
+    xvalid = X_test[rand_idx[N_train:]]
+    yvalid = ytest[rand_idx[N_train:]]
+    # xtrain, xvalid, ytrain, yvalid = train_test_split(X_train, y_train, test_size=0.2)
+    print(xtrain.shape, xvalid.shape, ytrain.shape, yvalid.shape)
 
 try:
     del X_train, y_train
@@ -79,10 +125,27 @@ except:
     pass
 gc.collect()
 
-xtrain = xtrain.astype('float32')
-xvalid = xvalid.astype('float32')
+# xtrain = xtrain.astype('float32')
+# xvalid = xvalid.astype('float32')
 xtrain /= 255
 xvalid /= 255
+
+model = None
+# raw predictions for optimizing thresholds later
+model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
+if model_paths:
+    model_path = min(model_paths)
+    print('loading ', model_path)
+    model_name = os.path.basename(model_path).replace('.hdf5', '')
+    model = load_model(model_path)
+else:
+    print('no model available, abort')
+
+
+resuming = True
+
+new_learning_rate = None
+new_learning_rate = 0.0001
 
 do_training = False
 if do_training:
@@ -91,31 +154,34 @@ if do_training:
     epochs = 200
     data_augmentation = True
 
-    # create the base pre-trained model
-    base_model = InceptionV3(weights='imagenet', include_top=False)
 
-    # add a global spatial average pooling layer
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    # let's add a fully-connected layer
-    x = Dense(1024, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(1024, activation="relu")(x)
-    predictions = Dense(17, activation='sigmoid')(x)
+    if not resuming:  # create fresh model
+        # create the base pre-trained model
+        base_model = InceptionV3(weights='imagenet', include_top=False)
 
-    # this is the model we will train
-    model = Model(inputs=base_model.input, outputs=predictions)
+        # add a global spatial average pooling layer
+        x = base_model.output
+        x = GlobalAveragePooling2D()(x)
+        # let's add a fully-connected layer
+        x = Dense(1024, activation='relu')(x)
+        x = Dropout(0.5)(x)
+        x = Dense(1024, activation="relu")(x)
+        predictions = Dense(17, activation='sigmoid')(x)
 
-    # first: train only the top layers (which were randomly initialized)
-    # i.e. freeze all convolutional InceptionV3 layers
-    for layer in base_model.layers:
-        layer.trainable = False
+        # this is the model we will train
+        model = Model(inputs=base_model.input, outputs=predictions)
 
-    # compile the model (should be done *after* setting layers to non-trainable)
-    model.compile(optimizer='adam', loss='binary_crossentropy')
+        # first: train only the top layers (which were randomly initialized)
+        # i.e. freeze all convolutional InceptionV3 layers
+        for layer in base_model.layers:
+            layer.trainable = False
 
-    import scipy.optimize as so
+        # compile the model (should be done *after* setting layers to non-trainable)
+        model.compile(optimizer='adam', loss='binary_crossentropy')
 
+    else:
+        if new_learning_rate is not None: # not sure if this works
+            model.optimizer.lr.set_value(new_learning_rate)
 
     # defining a set of callbacks
     class f2beta(Callback):
@@ -179,24 +245,21 @@ if do_training:
                             epochs=epochs, callbacks=[checkpoint, beta_score, earlystop],
                             validation_data=(xvalid, yvalid))
 
-if not do_training:
-    # raw predictions for optimizing thresholds later
-    model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
-    if model_paths:
-        model_path = min(model_paths)
-        print('loading ', model_path)
-        model_name = os.path.basename(model_path).replace('.hdf5', '')
-    else:
-        print('no model available, abort')
-        assert 0
-
-    model = load_model(model_path)
-
 ypred_train = model.predict(xtrain, verbose=1)
 ypred_valid = model.predict(xvalid, verbose=1)
+
+# a quick check on score
+y_pred_i = (ypred_train > 0.2).astype(int)
+score = fbeta_score(ytrain, y_pred_i, beta=2, average='samples')
+print('fbeta score on validation set: {}'.format(score))
+
+y_pred_i = (ypred_valid > 0.2).astype(int)
+score = fbeta_score(yvalid, y_pred_i, beta=2, average='samples')
+print('fbeta score on validation set: {}'.format(score))
 
 raw_prediction_filename = os.path.join(code_dir, 'raw_pred_{}.pkl'.format(model_name))
 
 import pickle
+
 with open(raw_prediction_filename, 'wb') as f:
     pickle.dump((ypred_train, ypred_valid, ytrain, yvalid), f)
