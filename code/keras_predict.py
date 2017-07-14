@@ -1,22 +1,10 @@
 import numpy as np
 import pandas as pd
-import glob
 import os
-import gc
 from skimage import io
 from skimage.transform import resize
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import fbeta_score
 from tqdm import tqdm
 from keras.models import load_model
-from keras.applications.inception_v3 import InceptionV3
-from keras.preprocessing import image
-from keras.models import Model
-from keras.layers import Dense, GlobalAveragePooling2D, Dropout
-from keras import backend as K
-from keras.callbacks import ModelCheckpoint, Callback, EarlyStopping
-from keras.preprocessing.image import ImageDataGenerator
-
 from tag_translation import train_label, tags_to_vec, map_predictions
 import pickle
 
@@ -27,20 +15,32 @@ code_dir = dir_path
 data_dir = os.path.join(dir_path, '../input')
 print(data_dir)
 
-# prepare lable decoder
+model_type = 'inception'
+model_type_file = os.path.join(code_dir, 'model_type.txt')
 
+if os.path.exists(model_type_file):
+    with open(model_type_file, 'r') as f:
+        model_type = f.readline()
+        print(model_type)
+
+if model_type.startswith('i'):
+    print('using InceptionV3')
+    image_shape = (299, 299)
+else:
+    print('using ResNet50')
+    image_shape = (224, 224)
 
 def assemble_batch(sub_list):
     print('sublist length ', len(sub_list))
     # X_test = np.empty([len(test_file_list), 299, 299, 3])
-    X_test = np.empty([len(sub_list), 299, 299, 3], dtype='float32')
+    X_test = np.empty([len(sub_list), image_shape[0], image_shape[1], 3], dtype='float32')
     test_filenames = []
     i = 0
     for t in tqdm(sub_list):
         filename = os.path.basename(t).replace('.jpg', '')
         test_filenames.append(filename)
         image = io.imread(t)
-        image = resize(image, (299, 299), mode='constant')  # for InceptionV3
+        image = resize(image, image_shape, mode='constant')  # for InceptionV3
         X_test[i, :, :, :] = image
         i += 1
 

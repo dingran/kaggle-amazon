@@ -101,3 +101,5 @@ models
 *.hdf5
 
 *.pkl
+
+model_type.txt

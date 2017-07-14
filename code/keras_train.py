@@ -16,6 +16,7 @@ from numpy.random import shuffle
 import keras
 from keras.models import load_model
 from keras.applications.inception_v3 import InceptionV3
+from keras.applications.resnet50 import ResNet50
 from keras.preprocessing import image
 from keras.models import Model
 from keras.layers import Dense, GlobalAveragePooling2D, Dropout
@@ -31,6 +32,23 @@ print(data_dir)
 file_type = 'jpg'
 print('file type: ', file_type)
 
+model_type = 'inception'
+model_type_file = os.path.join(code_dir, 'model_type.txt')
+
+if os.path.exists(model_type_file):
+    with open(model_type_file, 'r') as f:
+        model_type = f.readline()
+        print(model_type)
+
+if not model_type.startswith('i'):
+    print('using ResNet50')
+    keras_model = ResNet50
+    image_shape = (224, 224)
+else:
+    print('using InceptionV3')
+    keras_model = InceptionV3
+    image_shape = (299, 299)
+
 resuming = True
 new_learning_rate = None
 new_learning_rate = 0.0001
@@ -39,14 +57,14 @@ N_train_limit = int(2e9)
 
 if 1:
     N_sample = min(N_train_limit, train_label.shape[0])
-    X_train = np.empty([N_sample, 299, 299, 3], dtype='float32')
+    X_train = np.empty([N_sample, image_shape[0], image_shape[1], 3], dtype='float32')
     y_train = np.empty([N_sample, 17], dtype='float32')
     filename_list = []
     i = 0
     for idx, row in tqdm(train_label.iterrows(), total=N_sample):
         image = io.imread(
             os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
-        image = resize(image, (299, 299), mode='constant')  # for InceptionV3
+        image = resize(image, image_shape, mode='constant')  # for InceptionV3
         X_train[i, :, :, :] = image
         y_train[i, :] = row['y']
         filename_list.append(row['image_name'])
@@ -81,14 +99,14 @@ else:
     def assemble_batch(sub_list):
         print('sublist length ', len(sub_list))
         # X_test = np.empty([len(test_file_list), 299, 299, 3])
-        X_test = np.empty([len(sub_list), 299, 299, 3], dtype='float32')
+        X_test = np.empty([len(sub_list), image_shape[0], image_shape[1], 3], dtype='float32')
         test_filenames = []
         i = 0
         for t in tqdm(sub_list):
             filename = os.path.basename(t).replace('.jpg', '')
             test_filenames.append(filename)
             image = io.imread(t)
-            image = resize(image, (299, 299), mode='constant')  # for InceptionV3
+            image = resize(image, image_shape, mode='constant')  # for InceptionV3
             X_test[i, :, :, :] = image
             i += 1
 
@@ -163,7 +181,6 @@ if model_paths:
 else:
     print('no model available, abort')
 
-
 if do_training:
     batch_size = 32
     num_classes = 17
@@ -173,7 +190,7 @@ if do_training:
     if not resuming:  # create fresh model
         print('creating fresh model')
         # create the base pre-trained model
-        base_model = InceptionV3(weights='imagenet', include_top=False)
+        base_model = keras_model(weights='imagenet', include_top=False)
 
         # add a global spatial average pooling layer
         x = base_model.output
@@ -207,6 +224,7 @@ if do_training:
             print('compiling model with new learning rate {}'.format(new_learning_rate))
             adam_opt = keras.optimizers.Adam(lr=new_learning_rate, decay=1e-6)
             model.compile(optimizer=adam_opt, loss='binary_crossentropy')
+
 
     # defining a set of callbacks
     class f2beta(Callback):
@@ -282,7 +300,6 @@ y_pred_i = (ypred_valid > 0.2).astype(int)
 score = fbeta_score(yvalid, y_pred_i, beta=2, average='samples')
 print('fbeta score on validation set: {}'.format(score))
 
-
 model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
 if model_paths:
     model_path = min(model_paths)
@@ -291,7 +308,6 @@ if model_paths:
 else:
     print('no model available, abort')
     assert 0
-
 
 raw_prediction_filename = os.path.join(code_dir, 'raw_pred_{}.pkl'.format(model_name))
 
