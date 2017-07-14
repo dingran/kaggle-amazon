@@ -51,7 +51,7 @@ else:
     image_shape = (299, 299)
     n_traiable_layers = 10
 
-resuming = False
+resuming = True
 new_learning_rate = None
 new_learning_rate = 0.0001
 do_training = True
