@@ -204,11 +204,21 @@ if do_training:
 
         # this is the model we will train
         model = Model(inputs=base_model.input, outputs=predictions)
+        print('model has {} layers'.format(len(model.layers)))
 
         # first: train only the top layers (which were randomly initialized)
         # i.e. freeze all convolutional InceptionV3 layers
-        for layer in base_model.layers:
-            layer.trainable = False
+        # for layer in base_model.layers:
+        #     layer.trainable = False
+
+        N_last = len(model.layers)
+        if keras_model == InceptionV3:
+            N_last = min(N_last, 10)
+        else:
+            N_last = min(N_last, 10)
+        print('setting last {} layers to be trainable'.format(N_last))
+        for layer in model.layers[-N_last:]:
+            layer.trainable = True
 
         # compile the model (should be done *after* setting layers to non-trainable)
         model.compile(optimizer='adam', loss='binary_crossentropy')
@@ -218,6 +228,10 @@ if do_training:
 
         if 1:
             N_last = len(model.layers)
+            if keras_model == InceptionV3:
+                N_last = min(N_last, 10)
+            else:
+                N_last = min(N_last, 10)
             print('setting last {} layers to be trainable'.format(N_last))
             for layer in model.layers[-N_last:]:
                 layer.trainable = True
