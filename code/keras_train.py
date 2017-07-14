@@ -44,12 +44,14 @@ if not model_type.startswith('i'):
     print('using ResNet50')
     keras_model = ResNet50
     image_shape = (224, 224)
+    n_traiable_layers = 3
 else:
     print('using InceptionV3')
     keras_model = InceptionV3
     image_shape = (299, 299)
+    n_traiable_layers = 3
 
-resuming = True
+resuming = False
 new_learning_rate = None
 new_learning_rate = 0.0001
 do_training = True
@@ -204,18 +206,15 @@ if do_training:
 
         # this is the model we will train
         model = Model(inputs=base_model.input, outputs=predictions)
-        print('model has {} layers'.format(len(model.layers)))
+        N_layers = len(model.layers)
+        print('model has {} layers'.format(N_layers))
 
         # first: train only the top layers (which were randomly initialized)
         # i.e. freeze all convolutional InceptionV3 layers
         # for layer in base_model.layers:
         #     layer.trainable = False
 
-        N_last = len(model.layers)
-        if keras_model == InceptionV3:
-            N_last = min(N_last, 10)
-        else:
-            N_last = min(N_last, 10)
+        N_last = min(N_layers, n_traiable_layers)
         print('setting last {} layers to be trainable'.format(N_last))
         for layer in model.layers[-N_last:]:
             layer.trainable = True
@@ -226,15 +225,14 @@ if do_training:
     else:
         print('resuming with loaded model')
 
-        if 1:
-            N_last = len(model.layers)
-            if keras_model == InceptionV3:
-                N_last = min(N_last, 10)
-            else:
-                N_last = min(N_last, 10)
-            print('setting last {} layers to be trainable'.format(N_last))
-            for layer in model.layers[-N_last:]:
-                layer.trainable = True
+        N_layers = len(model.layers)
+        print('model has {} layers'.format(N_layers))
+
+        N_last = min(N_layers, n_traiable_layers)
+        print('setting last {} layers to be trainable'.format(N_last))
+        for layer in model.layers[-N_last:]:
+            layer.trainable = True
+
         if new_learning_rate is not None:  # not sure if this works
             print('compiling model with new learning rate {}'.format(new_learning_rate))
             adam_opt = keras.optimizers.Adam(lr=new_learning_rate, decay=1e-6)
