@@ -1,4 +1,5 @@
 import numpy as np
+import pickle
 import pandas as pd
 import glob
 import os
@@ -141,8 +142,27 @@ if model_paths:
     print('loading ', model_path)
     model_name = os.path.basename(model_path).replace('.hdf5', '')
     model = load_model(model_path)
+    raw_prediction_filename = os.path.join(code_dir, 'raw_pred_{}.pkl'.format(model_name))
+
+    if not os.path.exists(raw_prediction_filename):
+        print('{} does not exist, now generating it'.format(raw_prediction_filename))
+        ypred_train = model.predict(xtrain, verbose=1)
+        ypred_valid = model.predict(xvalid, verbose=1)
+
+        # a quick check on score
+        y_pred_i = (ypred_train > 0.2).astype(int)
+        score = fbeta_score(ytrain, y_pred_i, beta=2, average='samples')
+        print('fbeta score on validation set: {}'.format(score))
+
+        y_pred_i = (ypred_valid > 0.2).astype(int)
+        score = fbeta_score(yvalid, y_pred_i, beta=2, average='samples')
+        print('fbeta score on validation set: {}'.format(score))
+
+        with open(raw_prediction_filename, 'wb') as f:
+            pickle.dump((ypred_train, ypred_valid, ytrain, yvalid), f)
 else:
     print('no model available, abort')
+
 
 if do_training:
     batch_size = 32
@@ -177,9 +197,15 @@ if do_training:
 
     else:
         print('resuming with loaded model')
+
+        if 1:
+            N_last = len(model.layers)
+            print('setting last {} layers to be trainable'.format(N_last))
+            for layer in model.layers[-N_last:]:
+                layer.trainable = True
         if new_learning_rate is not None:  # not sure if this works
             print('compiling model with new learning rate {}'.format(new_learning_rate))
-            adam_opt = keras.optimizers.Adam(lr=new_learning_rate)
+            adam_opt = keras.optimizers.Adam(lr=new_learning_rate, decay=1e-6)
             model.compile(optimizer=adam_opt, loss='binary_crossentropy')
 
     # defining a set of callbacks
@@ -256,9 +282,18 @@ y_pred_i = (ypred_valid > 0.2).astype(int)
 score = fbeta_score(yvalid, y_pred_i, beta=2, average='samples')
 print('fbeta score on validation set: {}'.format(score))
 
-raw_prediction_filename = os.path.join(code_dir, 'raw_pred_{}.pkl'.format(model_name))
 
-import pickle
+model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
+if model_paths:
+    model_path = min(model_paths)
+    print('loading ', model_path)
+    model_name = os.path.basename(model_path).replace('.hdf5', '')
+else:
+    print('no model available, abort')
+    assert 0
+
+
+raw_prediction_filename = os.path.join(code_dir, 'raw_pred_{}.pkl'.format(model_name))
 
 with open(raw_prediction_filename, 'wb') as f:
     pickle.dump((ypred_train, ypred_valid, ytrain, yvalid), f)
