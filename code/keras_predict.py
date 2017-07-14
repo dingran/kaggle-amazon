@@ -15,9 +15,20 @@ code_dir = dir_path
 data_dir = os.path.join(dir_path, '../input')
 print(data_dir)
 
+file_type = 'jpg'
+file_folder = 'test-jpg'
+file_type_file = os.path.join(code_dir, 'file_type.txt')
+if os.path.exists(file_type_file):
+    with open(file_type_file, 'r') as f:
+        type_str = f.readline()
+        print(type_str)
+    if type_str == 'tif' or type_str.startswith('t'):
+        file_type = 'tif'
+        file_folder = 'test-tif-v2'
+print('file type: ', file_type)
+
 model_type = 'inception'
 model_type_file = os.path.join(code_dir, 'model_type.txt')
-
 if os.path.exists(model_type_file):
     with open(model_type_file, 'r') as f:
         model_type = f.readline()
@@ -30,6 +41,7 @@ else:
     print('using ResNet50')
     image_shape = (224, 224)
 
+
 def assemble_batch(sub_list):
     print('sublist length ', len(sub_list))
     # X_test = np.empty([len(test_file_list), 299, 299, 3])
@@ -37,11 +49,14 @@ def assemble_batch(sub_list):
     test_filenames = []
     i = 0
     for t in tqdm(sub_list):
-        filename = os.path.basename(t).replace('.jpg', '')
+        filename = os.path.basename(t).replace('.{}'.format(file_type), '')
         test_filenames.append(filename)
         image = io.imread(t)
         image = resize(image, image_shape, mode='constant')  # for InceptionV3
-        X_test[i, :, :, :] = image
+        if image.shape[-1] == 4:
+            X_test[i, :, :, :] = image[:, :, [0, 1, 3]]
+        else:
+            X_test[i, :, :, :] = image
         i += 1
 
     # X_test = np.stack(X_test, axis=0)
@@ -51,11 +66,12 @@ def assemble_batch(sub_list):
     return X_test, test_filenames
 
 
-test_file_list = glob.glob(os.path.join(data_dir, 'test-jpg/*.jpg'))
+test_file_list = glob.glob(os.path.join(data_dir, '{}/*.{}'.format(file_folder, file_type)))
 predict_on_train = False
 if predict_on_train:
     print('!!!!!!!!!!!!!!!!!!! predicting on training set')
-    test_file_list = glob.glob(os.path.join(data_dir, 'train-jpg/*.jpg'))
+    test_file_list = glob.glob(
+        os.path.join(data_dir, '{}/*.{}'.format(file_folder.replace('test', 'train'), file_type)))
 
 # load model
 model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))

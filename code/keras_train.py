@@ -30,6 +30,15 @@ data_dir = os.path.join(dir_path, '../input')
 print(data_dir)
 
 file_type = 'jpg'
+file_folder = 'train-jpg'
+file_type_file = os.path.join(code_dir, 'file_type.txt')
+if os.path.exists(file_type_file):
+    with open(file_type_file, 'r') as f:
+        type_str = f.readline()
+        print(type_str)
+    if type_str == 'tif' or type_str.startswith('t'):
+        file_type = 'tif'
+        file_folder = 'train-tif-v2'
 print('file type: ', file_type)
 
 model_type = 'inception'
@@ -65,9 +74,12 @@ if 1:
     i = 0
     for idx, row in tqdm(train_label.iterrows(), total=N_sample):
         image = io.imread(
-            os.path.join(data_dir, 'train-{}'.format(file_type), '{}.{}'.format(row['image_name'], file_type)))
+            os.path.join(data_dir, file_folder, '{}.{}'.format(row['image_name'], file_type)))
         image = resize(image, image_shape, mode='constant')  # for InceptionV3
-        X_train[i, :, :, :] = image
+        if file_type == 'tif':
+            X_train[i, :, :, :] = image[:, :, [0, 1, 3]]
+        else:
+            X_train[i, :, :, :] = image
         y_train[i, :] = row['y']
         filename_list.append(row['image_name'])
         i += 1
@@ -105,11 +117,14 @@ else:
         test_filenames = []
         i = 0
         for t in tqdm(sub_list):
-            filename = os.path.basename(t).replace('.jpg', '')
+            filename = os.path.basename(t).replace('.{}'.format(file_type), '')
             test_filenames.append(filename)
             image = io.imread(t)
             image = resize(image, image_shape, mode='constant')  # for InceptionV3
-            X_test[i, :, :, :] = image
+            if image.shape[-1] == 4:
+                X_test[i, :, :, :] = image[:, :, [0, 1, 3]]
+            else:
+                X_test[i, :, :, :] = image
             i += 1
 
         # X_test = np.stack(X_test, axis=0)
@@ -119,7 +134,7 @@ else:
         return X_test, test_filenames
 
 
-    test_file_list = glob.glob(os.path.join(data_dir, 'train-jpg/*.jpg'))
+    test_file_list = glob.glob(os.path.join(data_dir, '{}/*.{}'.format(file_folder, file_type)))
     N_sample = min(N_train_limit, len(test_file_list))
 
     X_test, test_filenames = assemble_batch(test_file_list[:N_sample])
@@ -184,7 +199,7 @@ if resuming:
                 pickle.dump((ypred_train, ypred_valid, ytrain, yvalid), f)
     else:
         print('no model available, abort')
-        resuming=False
+        resuming = False
 
 if do_training:
     batch_size = 32

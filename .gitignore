@@ -103,3 +103,4 @@ models
 *.pkl
 
 model_type.txt
+file_type.txt
