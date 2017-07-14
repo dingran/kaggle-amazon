@@ -44,12 +44,12 @@ if not model_type.startswith('i'):
     print('using ResNet50')
     keras_model = ResNet50
     image_shape = (224, 224)
-    n_traiable_layers = 3
+    n_traiable_layers = 10
 else:
     print('using InceptionV3')
     keras_model = InceptionV3
     image_shape = (299, 299)
-    n_traiable_layers = 3
+    n_traiable_layers = 10
 
 resuming = False
 new_learning_rate = None
@@ -218,11 +218,14 @@ if do_training:
 
         N_last = min(N_layers, n_traiable_layers)
         print('setting last {} layers to be trainable'.format(N_last))
+        for layer in model.layers:
+            layer.trainable = False
         for layer in model.layers[-N_last:]:
             layer.trainable = True
 
         # compile the model (should be done *after* setting layers to non-trainable)
-        model.compile(optimizer='adam', loss='binary_crossentropy')
+        adam_opt = keras.optimizers.Adam(lr=0.001, decay=1e-6)
+        model.compile(optimizer=adam_opt, loss='binary_crossentropy')
 
     else:
         print('resuming with loaded model')
@@ -232,6 +235,8 @@ if do_training:
 
         N_last = min(N_layers, n_traiable_layers)
         print('setting last {} layers to be trainable'.format(N_last))
+        for layer in model.layers:
+            layer.trainable = False
         for layer in model.layers[-N_last:]:
             layer.trainable = True
 
