@@ -180,6 +180,7 @@ if model_paths:
             pickle.dump((ypred_train, ypred_valid, ytrain, yvalid), f)
 else:
     print('no model available, abort')
+    resuming=False
 
 if do_training:
     batch_size = 32
