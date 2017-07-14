@@ -157,32 +157,34 @@ xvalid /= 255
 model = None
 # raw predictions for optimizing thresholds later
 model_paths = glob.glob(os.path.join(code_dir, 'model*.hdf5'))
-if model_paths:
-    model_path = min(model_paths)
-    print('loading ', model_path)
-    model_name = os.path.basename(model_path).replace('.hdf5', '')
-    model = load_model(model_path)
-    raw_prediction_filename = os.path.join(code_dir, 'raw_pred_{}.pkl'.format(model_name))
 
-    if not os.path.exists(raw_prediction_filename):
-        print('{} does not exist, now generating it'.format(raw_prediction_filename))
-        ypred_train = model.predict(xtrain, verbose=1)
-        ypred_valid = model.predict(xvalid, verbose=1)
+if resuming:
+    if model_paths:
+        model_path = min(model_paths)
+        print('loading ', model_path)
+        model_name = os.path.basename(model_path).replace('.hdf5', '')
+        model = load_model(model_path)
+        raw_prediction_filename = os.path.join(code_dir, 'raw_pred_{}.pkl'.format(model_name))
 
-        # a quick check on score
-        y_pred_i = (ypred_train > 0.2).astype(int)
-        score = fbeta_score(ytrain, y_pred_i, beta=2, average='samples')
-        print('fbeta score on validation set: {}'.format(score))
+        if not os.path.exists(raw_prediction_filename):
+            print('{} does not exist, now generating it'.format(raw_prediction_filename))
+            ypred_train = model.predict(xtrain, verbose=1)
+            ypred_valid = model.predict(xvalid, verbose=1)
 
-        y_pred_i = (ypred_valid > 0.2).astype(int)
-        score = fbeta_score(yvalid, y_pred_i, beta=2, average='samples')
-        print('fbeta score on validation set: {}'.format(score))
+            # a quick check on score
+            y_pred_i = (ypred_train > 0.2).astype(int)
+            score = fbeta_score(ytrain, y_pred_i, beta=2, average='samples')
+            print('fbeta score on validation set: {}'.format(score))
 
-        with open(raw_prediction_filename, 'wb') as f:
-            pickle.dump((ypred_train, ypred_valid, ytrain, yvalid), f)
-else:
-    print('no model available, abort')
-    resuming=False
+            y_pred_i = (ypred_valid > 0.2).astype(int)
+            score = fbeta_score(yvalid, y_pred_i, beta=2, average='samples')
+            print('fbeta score on validation set: {}'.format(score))
+
+            with open(raw_prediction_filename, 'wb') as f:
+                pickle.dump((ypred_train, ypred_valid, ytrain, yvalid), f)
+    else:
+        print('no model available, abort')
+        resuming=False
 
 if do_training:
     batch_size = 32
